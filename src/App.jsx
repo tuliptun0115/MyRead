@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react';
 import './index.css';
+import apiService from './services/apiService';
+import { BookIcon, CameraIcon } from './components/Icons';
+import BookListItem from './components/BookListItem';
+import PieChart from './components/PieChart';
 
-const DEFAULT_COVER = import.meta.env.VITE_DEFAULT_COVER_URL || 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=600&auto=format&fit=crop&ixlib=rb-4.0.3';
-const GAS_URL = import.meta.env.VITE_GAS_API_URL;
-const PAGE_SIZE = 20;
+const DEFAULT_COVER = import.meta.env.VITE_DEFAULT_COVER_URL || 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=600&auto=format&fit=crop';
 
-// ── 六大分類 Mapping ──
+const getAuth = () => {
+    const stored = localStorage.getItem('myread_auth');
+    return stored ? JSON.parse(stored) : null;
+};
+
 const getMainCategory = (rawCategory) => {
     if (!rawCategory) return '未分類';
     const c = rawCategory.toLowerCase();
@@ -19,442 +25,356 @@ const getMainCategory = (rawCategory) => {
     return '其他';
 };
 
-// ── SVG 圖示元件 ──
-const BookIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', color: 'var(--accent-pink)' }}>
-        <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
-    </svg>
-);
-
-const CameraIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="upload-icon-svg">
-        <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
-        <circle cx="12" cy="13" r="3" />
-    </svg>
-);
-
-// ── 書籍列表單行元件 ──
-function BookListItem({ record, defaultCover, onClick }) {
-    return (
-        <div className="book-list-item" onClick={onClick} style={{ cursor: 'pointer' }}>
-            <img
-                src={record.coverUrl || defaultCover}
-                alt={record.title}
-                className="list-cover"
-                onError={(e) => { e.target.src = defaultCover; }}
-            />
-            <div className="list-info">
-                <div className="list-title">{record.title}</div>
-                <div className="list-meta">
-                    <span className="list-author">{record.author}</span>
-                    {record.category && <span className="list-category">{record.category}</span>}
-                    {record.publisher && <span className="list-publisher">{record.publisher}</span>}
-                </div>
-                <div className="list-summary">{record.summary}</div>
-            </div>
-            <div className="list-date">完讀<br />{record.completionDate}</div>
-        </div>
-    );
-}
-
-// ── 書籍詳細頁元件 ──
-function BookDetail({ record, defaultCover, onBack }) {
-    return (
-        <div className="book-detail">
-            <button className="back-btn" onClick={onBack}>← 返回</button>
-            <div className="detail-hero">
-                <img
-                    src={record.coverUrl || defaultCover}
-                    alt={record.title}
-                    className="detail-cover"
-                    onError={(e) => { e.target.src = defaultCover; }}
-                />
-                <div className="detail-main">
-                    <h2 className="detail-title">{record.title}</h2>
-                    <div className="detail-meta-grid">
-                        {record.author && <div className="detail-meta-item"><span className="detail-meta-label">作者</span><span>{record.author}</span></div>}
-                        {record.category && <div className="detail-meta-item"><span className="detail-meta-label">分類</span><span className="list-category">{record.category}</span></div>}
-                        {record.publisher && <div className="detail-meta-item"><span className="detail-meta-label">出版社</span><span>{record.publisher}</span></div>}
-                        {record.completionDate && <div className="detail-meta-item"><span className="detail-meta-label">完讀日</span><span>{record.completionDate}</span></div>}
-                    </div>
-                </div>
-            </div>
-            {record.summary && (
-                <div className="detail-summary-section">
-                    <h3 className="detail-summary-label">📝 AI 摘要精華</h3>
-                    <p className="detail-summary-text">{record.summary}</p>
-                </div>
-            )}
-        </div>
-    );
-}
-
 function App() {
+    const [auth, setAuth] = useState(getAuth());
+    const [loginData, setLoginData] = useState({ username: '', password: '' });
     const [records, setRecords] = useState([]);
-    const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
-    const [toast, setToast] = useState('');
+    const [loading, setLoading] = useState(false);
     const [ocrLoading, setOcrLoading] = useState(false);
-    const [currentPage, setCurrentPage] = useState('home'); // 'home' | 'list' | 'detail'
-    const [listPage, setListPage] = useState(1);
+    const [toast, setToast] = useState('');
+    const [currentPage, setCurrentPage] = useState('home'); 
     const [selectedRecord, setSelectedRecord] = useState(null);
-    const [prevPage, setPrevPage] = useState('home'); // 從哪裡進入詳細頁
+    const [isEditing, setIsEditing] = useState(false);
 
-    const [formData, setFormData] = useState({ title: '', coverUrl: '', completionDate: '' });
-    const [filterYear, setFilterYear] = useState('all');
-    const [filterMonth, setFilterMonth] = useState('all');
-    const [filterCategory, setFilterCategory] = useState('all'); // 新增分類篩選狀態
+    const [formData, setFormData] = useState({
+        title: '', subtitle: '', author: '', publisher: '', 
+        category: '', completionDate: '', summary: '', coverUrl: ''
+    });
+    const [showStats, setShowStats] = useState(false);
 
     const fetchRecords = async () => {
-        if (!GAS_URL || GAS_URL.includes('YOUR_SCRIPT_ID')) return;
         setFetching(true);
         try {
-            const res = await fetch(GAS_URL);
-            const data = await res.json();
-            if (data.status === 'success') {
-                const sorted = data.data.sort((a, b) => new Date(b.completionDate) - new Date(a.completionDate));
+            const data = await apiService.fetchRecords();
+            if (data && data.length > 0) {
+                const sorted = data.sort((a, b) => new Date(b.completionDate) - new Date(a.completionDate));
                 setRecords(sorted);
             }
-        } catch (err) { console.error('Failed to fetch records', err); }
-        setFetching(false);
+        } catch (e) {
+            setToast('⚠️ 資料讀取異常');
+        } finally {
+            setFetching(false);
+        }
     };
 
-    useEffect(() => { fetchRecords(); }, []);
-    useEffect(() => {
-        if (toast) { const t = setTimeout(() => setToast(''), 3000); return () => clearTimeout(t); }
-    }, [toast]);
+    const compressImage = (file) => new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 600; canvas.height = 800;
+                canvas.getContext('2d').drawImage(img, 0, 0, 600, 800);
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    const handleImageUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        try {
+            const b64WithPrefix = await compressImage(file);
+            const b64Data = b64WithPrefix.split(',')[1];
+            
+            setFormData(prev => ({ ...prev, coverUrl: b64WithPrefix }));
+            setOcrLoading(true);
+            setToast('🔍 Gemini 1.5 辨識中...');
+
+            const ocrRes = await apiService.performOCR(b64Data);
+            
+            if (ocrRes.success) {
+                setFormData(prev => ({ 
+                    ...prev, 
+                    title: ocrRes.title, 
+                    author: ocrRes.author || '',
+                    publisher: ocrRes.publisher || '',
+                    category: ocrRes.category || '',
+                    completionDate: new Date().toISOString().split('T')[0]
+                }));
+                
+                setToast(`📚 找到《${ocrRes.title}》，正在檢索資料...`);
+                
+                // 同步進行搜尋與 AI 摘要生成
+                const searchRes = await apiService.searchBook(ocrRes.title);
+                let finalSummary = '';
+
+                if (searchRes.success && searchRes.data) {
+                    finalSummary = searchRes.data.summary || '';
+                    setFormData(prev => ({
+                        ...prev,
+                        coverUrl: searchRes.data.coverUrl || prev.coverUrl,
+                        summary: finalSummary,
+                        author: searchRes.data.author || prev.author,
+                        publisher: searchRes.data.publisher || prev.publisher,
+                        category: searchRes.data.category || prev.category
+                    }));
+                }
+
+                // 如果搜尋結果沒有摘要，或摘要太短，則啟動 AI 深度創作
+                if (!finalSummary || finalSummary.length < 50) {
+                    setToast('✍️ Gemini 2.5 正在閱讀並撰寫深度摘要...');
+                    const aiRes = await apiService.generateSummary(`書名：${ocrRes.title}，作者：${ocrRes.author || '未知'}`);
+                    if (aiRes && aiRes.summary) {
+                        setFormData(prev => ({ ...prev, summary: aiRes.summary }));
+                        setToast('✨ 高品質紀錄已就緒！');
+                    } else {
+                        setToast('✅ 辨識完成！');
+                    }
+                } else {
+                    setToast('✅ 資料同步完成！');
+                }
+            } else {
+                setToast(`❌ 辨識失敗：${ocrRes.message || '連線超時'}`);
+            }
+        } catch (err) {
+            setToast('❌ 圖片處理異常');
+        } finally {
+            setOcrLoading(false);
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!formData.title) return setToast('⚠️ 請至少輸入書名');
+        
+        setLoading(true);
+        try {
+            const res = await apiService.submitRecord(formData);
+            if (res.success) {
+                setToast('✅ 紀錄已成功存檔！');
+                setFormData({ title: '', subtitle: '', author: '', publisher: '', category: '', completionDate: '', summary: '', coverUrl: '' });
+                fetchRecords();
+            } else {
+                setToast(`❌ 儲存失敗: ${res.message}`);
+            }
+        } catch (e) {
+            setToast('❌ 連線至伺服器失敗');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const compressImage = (file) => new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const MAX_W = 800, MAX_H = 1100;
-                let w = img.width, h = img.height;
-                if (w > h) { if (w > MAX_W) { h *= MAX_W / w; w = MAX_W; } }
-                else { if (h > MAX_H) { w *= MAX_H / h; h = MAX_H; } }
-                canvas.width = w; canvas.height = h;
-                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                const TARGET = 200000;
-                let q = 0.85, dataUrl = canvas.toDataURL('image/jpeg', q);
-                while (dataUrl.length > TARGET && q > 0.3) { q -= 0.1; dataUrl = canvas.toDataURL('image/jpeg', Math.max(q, 0.3)); }
-                resolve(dataUrl);
-            };
-            img.src = event.target.result;
-        };
-        reader.readAsDataURL(file);
-    });
+    useEffect(() => { if (auth) fetchRecords(); }, [auth]);
+    useEffect(() => { if (toast) { const t = setTimeout(() => setToast(''), 3000); return () => clearTimeout(t); } }, [toast]);
 
-    const runOcrViaGas = async (dataUrl) => {
-        if (!GAS_URL || GAS_URL.includes('YOUR_SCRIPT_ID')) return '';
-        const b64 = dataUrl.split(',')[1];
-        const mime = dataUrl.match(/^data:(image\/[a-zA-Z]+);base64,/)?.[1] || 'image/jpeg';
-        try {
-            const res = await fetch(GAS_URL, {
-                method: 'POST', mode: 'cors',
-                headers: { 'Content-Type': 'text/plain' },
-                body: `ACTION:OCR+++${mime}|||${b64}`
-            });
-            if (res.ok) {
-                const json = await res.json();
-                if (json?.error) console.warn('[MyRead OCR] Gemini 錯誤:', json.error);
-                return json?.title?.trim() || '';
-            }
-        } catch (err) { console.warn('[MyRead OCR] 例外:', err); }
-        return '';
-    };
-
-    const handleImageUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const dataUrl = await compressImage(file);
-        setFormData(prev => ({ ...prev, coverUrl: dataUrl }));
-        if (!formData.title.trim()) {
-            setOcrLoading(true);
-            setToast('🔍 AI 正在辨識封面書名...');
-            const detected = await runOcrViaGas(dataUrl);
-            setOcrLoading(false);
-            if (detected && detected !== '未知書籍' && detected !== '未知') {
-                setFormData(prev => ({ ...prev, title: detected }));
-                setToast(`📚 AI 辨識到書名：${detected}`);
-                setTimeout(() => document.querySelector('input[name="title"]')?.focus(), 100);
-            } else if (detected) {
-                setToast('📷 封面無法辨識，請手動輸入書名');
-            } else {
-                setToast('⚠️ OCR 服務未設定，請手動輸入書名');
-            }
-        }
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!GAS_URL || GAS_URL.includes('YOUR_SCRIPT_ID')) { alert('請先設定 VITE_GAS_API_URL'); return; }
-        setLoading(true);
-        try {
-            const rawPayload = JSON.stringify({
-                t: formData.title,
-                c: formData.coverUrl.trim() || DEFAULT_COVER,
-                d: formData.completionDate || new Date().toISOString().split('T')[0]
-            });
-            await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: rawPayload });
-            setFormData({ title: '', coverUrl: '', completionDate: '' });
-            setToast('✨ 閱讀紀錄已儲存！');
-            setTimeout(fetchRecords, 1500);
-        } catch (err) { console.error(err); setToast('❌ 新增失敗，請稍後再試。'); }
-        setLoading(false);
-    };
-
-    const openDetail = (record, from) => {
-        setSelectedRecord(record);
-        setPrevPage(from);
-        setCurrentPage('detail');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-    const goHome = () => { setCurrentPage('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-    const goToList = (category = 'all') => {
-        setFilterCategory(category);
-        setCurrentPage('list');
-        setListPage(1);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-    const goBack = () => { setCurrentPage(prevPage); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-
-    // ── 計算資料與防呆 ──
-    const safeDateOffset = (dStr) => {
-        if (!dStr) return 0;
-        try {
-            const d = new Date(dStr);
-            return isNaN(d) ? 0 : d.getTime();
-        } catch { return 0; }
-    };
-
-    const sortedRecords = [...records].sort((a, b) => safeDateOffset(b.completionDate) - safeDateOffset(a.completionDate));
-    const homeRecords = sortedRecords.slice(0, 10);
-
-    const safeDateYear = (dStr) => {
-        if (!dStr) return null;
-        try {
-            const d = new Date(dStr);
-            return isNaN(d) ? null : d.getFullYear();
-        } catch { return null; }
-    };
-
-    const years = [...new Set(records.map(r => safeDateYear(r.completionDate)))].filter(Boolean).sort((a, b) => b - a);
-
-    const filteredRecords = sortedRecords.filter(r => {
-        if (!r.completionDate) {
-            return filterYear === 'all' && filterMonth === 'all';
-        }
-        try {
-            const d = new Date(r.completionDate);
-            if (isNaN(d)) return filterYear === 'all' && filterMonth === 'all' && filterCategory === 'all';
-            const matchYear = filterYear === 'all' || d.getFullYear().toString() === filterYear;
-            const matchMonth = filterMonth === 'all' || (d.getMonth() + 1).toString() === filterMonth;
-            const mainCat = getMainCategory(r.category);
-            const matchCategory = filterCategory === 'all' || mainCat === filterCategory;
-            return matchYear && matchMonth && matchCategory;
-        } catch {
-            return filterYear === 'all' && filterMonth === 'all' && filterCategory === 'all';
-        }
-    });
-    const totalPages = Math.ceil(filteredRecords.length / PAGE_SIZE) || 1;
-    const paginatedRecords = filteredRecords.slice((listPage - 1) * PAGE_SIZE, listPage * PAGE_SIZE);
-
+    // ── 計算統計數據 ──
     const categories = {};
-    const rawCategories = {};
     records.forEach(r => {
-        const cat = r.category || '未分類';
-        rawCategories[cat] = (rawCategories[cat] || 0) + 1;
         const mainCat = getMainCategory(r.category);
         categories[mainCat] = (categories[mainCat] || 0) + 1;
     });
-    const sortedRawCategories = Object.entries(rawCategories).sort((a, b) => b[1] - a[1]);
-    let ang = 0;
-    const colors = ['#fbcfe8', '#f9a8d4', '#f472b6', '#ec4899', '#db2777', '#be185d'];
-    const pieSlices = Object.entries(categories).map(([, count], i) => {
-        const p = count / records.length;
-        const start = ang; ang += p * 360;
-        return `${colors[i % colors.length]} ${start}deg ${ang}deg`;
-    });
-    const pieBackground = pieSlices.length > 0 ? `conic-gradient(${pieSlices.join(', ')})` : '#fdf2f8';
+    const sortedCategories = Object.entries(categories).sort((a, b) => b[1] - a[1]);
+
+    if (!auth) {
+        return (
+            <div className="login-overlay">
+                <div className="login-card">
+                    <h2 className="login-title"><BookIcon /> 書香閱讀 登入</h2>
+                    <input type="text" placeholder="帳號" value={loginData.username} onChange={(e) => setLoginData({...loginData, username: e.target.value})} />
+                    <input type="password" placeholder="密碼" value={loginData.password} onChange={(e) => setLoginData({...loginData, password: e.target.value})} />
+                    <button onClick={() => { setAuth(loginData); localStorage.setItem('myread_auth', JSON.stringify(loginData)); }} className="submit-btn" style={{ marginTop: '20px' }}>進入書庫</button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="container">
             <div className="site-header">
-                <h1 style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={goHome}><BookIcon /> 書香筆記</h1>
+                <h1 onClick={() => setCurrentPage('home')} style={{ cursor: 'pointer' }}><BookIcon /> 書香閱讀</h1>
                 <nav className="page-nav">
-                    <button className={`nav-btn ${currentPage === 'home' ? 'active' : ''}`} onClick={goHome}>🏠 首頁</button>
-                    <button className={`nav-btn ${currentPage === 'list' ? 'active' : ''}`} onClick={() => goToList('all')}>📚 書籍列表</button>
+                    <button className={`nav-btn ${currentPage === 'home' ? 'active' : ''}`} onClick={() => setCurrentPage('home')}>首頁</button>
+                    <button className={`nav-btn ${currentPage === 'list' ? 'active' : ''}`} onClick={() => setCurrentPage('list')}>閱讀紀錄</button>
+                    <button className="nav-btn logout" onClick={() => { setAuth(null); localStorage.removeItem('myread_auth'); }}>登出</button>
                 </nav>
             </div>
 
             {toast && <div className="toast-notification">{toast}</div>}
 
-            {/* ── 首頁 ── */}
             {currentPage === 'home' && (
                 <>
-                    <div className="hero-banner">
-                        <div className="hero-content">
-                            <h2>記錄每一次與文字的相遇</h2>
-                            <p>上傳書封，AI 自動為您整理書籍資訊與閱讀心得摘要，打造專屬您的美學書庫。</p>
-                        </div>
+                    <div className="home-stats-line">
+                        <div className="home-stats-text">累計閱讀<span>{records.length}</span>本</div>
+                        <button className="nav-btn secondary" onClick={() => setShowStats(!showStats)}>
+                            {showStats ? '隱藏統計' : '詳細統計'}
+                        </button>
                     </div>
+
+                    {showStats && (
+                        <div className="stats-wrapper" style={{ animation: 'slideUp 0.4s ease-out' }}>
+                            <PieChart data={Object.entries(records.reduce((acc, r) => {
+                                const cat = getMainCategory(r.category);
+                                acc[cat] = (acc[cat] || 0) + 1;
+                                return acc;
+                            }, {})).sort((a,b) => b[1]-a[1])} />
+                        </div>
+                    )}
 
                     <div className="form-container">
                         <form onSubmit={handleSubmit}>
-                            <div className="upload-section">
-                                <label className="upload-label">
-                                    {formData.coverUrl ? (
-                                        <img src={formData.coverUrl} alt="Cover Preview" className="cover-preview" />
-                                    ) : (
-                                        <div className="upload-placeholder">
-                                            <CameraIcon />
-                                            <span>點擊上傳書籍封面</span>
-                                            <span className="upload-hint">支援圖片檔案<br />AI 將自動辨識書名</span>
-                                        </div>
-                                    )}
-                                    <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden-input" />
-                                </label>
-                                {ocrLoading && <div className="ocr-loading"><div className="pink-spinner small"></div><span>AI 辨識中...</span></div>}
-                            </div>
-                            <div className="form-group grid-2">
-                                <div>
-                                    <label>書名 (選填，AI 將自動辨識)</label>
-                                    <input type="text" name="title" value={formData.title} onChange={handleInputChange} placeholder="上傳封面後系統將自動填入" />
+                            <div className="form-grid-layout">
+                                <div className="upload-section">
+                                    <label className="upload-label">
+                                        {formData.coverUrl ? (
+                                            <img src={formData.coverUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => e.target.src = DEFAULT_COVER} />
+                                        ) : (
+                                            <div className="upload-placeholder">
+                                                <CameraIcon />
+                                                <span style={{ fontSize: '0.9rem', textAlign: 'center' }}>上傳書籍封面</span>
+                                                {ocrLoading && <div className="ocr-loading"><span>分析中...</span></div>}
+                                            </div>
+                                        )}
+                                        <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden-input" />
+                                    </label>
                                 </div>
-                                <div>
-                                    <label>閱讀完成日 (選填)</label>
-                                    <input type="date" name="completionDate" value={formData.completionDate} onChange={handleInputChange} />
+                                <div className="input-box" style={{ justifyContent: 'center' }}>
+                                    <label>📖 封面連結</label>
+                                    <input name="coverUrl" type="text" value={formData.coverUrl} onChange={handleInputChange} placeholder="自動填入或手動輸入網址" />
                                 </div>
                             </div>
-                            {loading ? (
-                                <div className="loader-container"><div className="pink-spinner"></div><div className="loader-text">AI 正在為您優雅地分析書籍...</div></div>
-                            ) : (
-                                <button type="submit" className="submit-btn">儲存閱讀紀錄</button>
-                            )}
+
+                            <div className="grid-2">
+                                <div className="input-box">
+                                    <label>書名</label>
+                                    <input name="title" type="text" value={formData.title} onChange={handleInputChange} required />
+                                </div>
+                                <div className="input-box">
+                                    <label>完成日</label>
+                                    <input name="completionDate" type="date" value={formData.completionDate} onChange={handleInputChange} />
+                                </div>
+                                <div className="input-box">
+                                    <label>作者</label>
+                                    <input name="author" type="text" value={formData.author} onChange={handleInputChange} />
+                                </div>
+                                <div className="input-box">
+                                    <label>出版社</label>
+                                    <input name="publisher" type="text" value={formData.publisher} onChange={handleInputChange} />
+                                </div>
+                                <div className="input-box" style={{ gridColumn: 'span 2' }}>
+                                    <label>✨ AI 心得</label>
+                                    <textarea name="summary" value={formData.summary} onChange={handleInputChange} rows="5" placeholder="自動產生的精華摘要..." />
+                                </div>
+                                <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'center' }}>
+                                    <button type="submit" className="submit-btn" disabled={loading} style={{ width: '200px' }}>
+                                        {loading ? '儲存中...' : '儲存'}
+                                    </button>
+                                </div>
+                            </div>
                         </form>
                     </div>
 
-                    <div className="dashboard">
-                        <div className="dashboard-stats">
-                            <div className="stat-item">
-                                <div className="stat-value">{records.length}</div>
-                                <div className="stat-label">總閱讀數 (本)</div>
-                            </div>
-                        </div>
-                        <div className="dashboard-chart">
-                            <div className="pie-chart" style={{ background: pieBackground }}></div>
-                            <div className="pie-legend">
-                                {Object.entries(categories).map(([cat, count], i) => (
-                                    <div
-                                        key={cat}
-                                        className="legend-item"
-                                    >
-                                        <span className="legend-color" style={{ background: colors[i % colors.length] }}></span>
-                                        <span className="legend-text">{cat} ({count})</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
-                            <button className="view-all-btn" onClick={() => setCurrentPage('analysis')}>
-                                查看更多詳細分析 →
-                            </button>
-                        </div>
+                    <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h2 className="section-title" style={{ marginBottom: 0 }}>最新閱讀紀錄</h2>
+                        <button className="nav-btn secondary" onClick={() => setCurrentPage('list')}>看全部</button>
                     </div>
-
-                    <div className="section-header">
-                        <h2 className="section-title">最新閱讀紀錄</h2>
-                        {records.length > 10 && (
-                            <button className="view-all-btn" onClick={() => goToList('all')}>查看全部 {records.length} 本 →</button>
-                        )}
-                    </div>
-
-                    {fetching ? (
-                        <div className="loader-container"><div className="pink-spinner"></div><div className="loader-text">載入您的閱讀品味中...</div></div>
-                    ) : (
+                    {fetching ? <div className="loader-text">載入中...</div> : (
                         <div className="books-list">
-                            {homeRecords.map((r, i) => <BookListItem key={i} record={r} defaultCover={DEFAULT_COVER} onClick={() => openDetail(r, 'home')} />)}
-                            {homeRecords.length === 0 && <div className="no-data">還沒有閱讀紀錄，上傳第一本書吧！</div>}
-                        </div>
-                    )}
-                </>
-            )}
-
-            {/* ── 書籍列表頁 ── */}
-            {currentPage === 'list' && (
-                <>
-                    <div className="section-header">
-                        <h2 className="section-title">全部書籍列表</h2>
-                        <span className="record-count">共 {filteredRecords.length} 筆</span>
-                    </div>
-                    <div className="filter-section">
-                        <select onChange={e => { setFilterCategory(e.target.value); setListPage(1); }} value={filterCategory} className="filter-select">
-                            <option value="all">所有分類</option>
-                            {Object.keys(categories).sort().map(c => <option key={c} value={c}>{c} ({categories[c]})</option>)}
-                        </select>
-                        <select onChange={e => { setFilterYear(e.target.value); setListPage(1); }} value={filterYear} className="filter-select">
-                            <option value="all">所有年份</option>
-                            {years.map(y => <option key={y} value={y}>{y} 年</option>)}
-                        </select>
-                        <select onChange={e => { setFilterMonth(e.target.value); setListPage(1); }} value={filterMonth} className="filter-select">
-                            <option value="all">所有月份</option>
-                            {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1}>{i + 1} 月</option>)}
-                        </select>
-                    </div>
-                    {fetching ? (
-                        <div className="loader-container"><div className="pink-spinner"></div><div className="loader-text">載入中...</div></div>
-                    ) : (
-                        <>
-                            <div className="books-list">
-                                {paginatedRecords.map((r, i) => <BookListItem key={i} record={r} defaultCover={DEFAULT_COVER} onClick={() => openDetail(r, 'list')} />)}
-                                {filteredRecords.length === 0 && <div className="no-data">目前沒有符合條件的閱讀紀錄。</div>}
-                            </div>
-                            {totalPages > 1 && (
-                                <div className="pagination">
-                                    <button className="page-btn" disabled={listPage === 1}
-                                        onClick={() => { setListPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>← 上一頁</button>
-                                    <span className="page-info">{listPage} / {totalPages}</span>
-                                    <button className="page-btn" disabled={listPage === totalPages}
-                                        onClick={() => { setListPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>下一頁 →</button>
-                                </div>
+                            {records.length > 0 ? (
+                                records.slice(0, 5).map((r, i) => (
+                                    <BookListItem key={i} record={r} defaultCover={DEFAULT_COVER} onClick={() => { setSelectedRecord(r); setCurrentPage('detail'); }} />
+                                ))
+                            ) : (
+                                <div className="no-data">目前沒有紀錄，趕快分享一本好書吧！</div>
                             )}
-                        </>
+                        </div>
                     )}
                 </>
             )}
 
-            {/* ── 詳細分析頁 ── */}
-            {currentPage === 'analysis' && (
-                <div className="analysis-page">
-                    <button className="back-btn" onClick={() => setCurrentPage('home')}>← 返回首頁</button>
-                    <div className="section-header">
-                        <h2 className="section-title">閱讀詳細分析</h2>
-                        <span className="record-count">共 {records.length} 筆紀錄</span>
-                    </div>
-                    <div className="form-container">
-                        <h3 style={{ color: 'var(--text-main)', marginBottom: '1.5rem' }}>各類別詳細統計</h3>
-                        <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-                            {sortedRawCategories.map(([cat, count]) => (
-                                <div key={cat} style={{ background: 'var(--primary-pink)', padding: '1rem', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span style={{ fontWeight: '600', color: 'var(--accent-pink-hover)' }}>{cat}</span>
-                                    <span style={{ color: 'var(--text-main)', fontSize: '0.9rem' }}>{count} 本</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+            {currentPage === 'list' && (
+                <div className="books-list" style={{ marginTop: '20px' }}>
+                    {records.map((r, i) => (
+                        <BookListItem key={i} record={r} defaultCover={DEFAULT_COVER} onClick={() => { setSelectedRecord(r); setCurrentPage('detail'); }} />
+                    ))}
                 </div>
             )}
 
-            {/* ── 書籍詳細頁 ── */}
             {currentPage === 'detail' && selectedRecord && (
-                <BookDetail record={selectedRecord} defaultCover={DEFAULT_COVER} onBack={goBack} />
+                <div className="book-detail">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2.5rem' }}>
+                        <button className="back-btn" style={{ marginBottom: 0 }} onClick={() => { setIsEditing(false); setCurrentPage(records.length > 5 ? 'list' : 'home'); }}>← 返回書庫</button>
+                        <button className="nav-btn" onClick={async () => {
+                            if (isEditing) {
+                                setLoading(true);
+                                const res = await apiService.updateRecord(selectedRecord);
+                                if (res.success) {
+                                    setToast('✅ 資料更新成功！');
+                                    fetchRecords();
+                                    setIsEditing(false);
+                                } else {
+                                    setToast('❌ 更新失敗');
+                                }
+                                setLoading(false);
+                            } else {
+                                setIsEditing(true);
+                            }
+                        }}>
+                            {isEditing ? (loading ? '儲存中...' : '確認儲存') : '編輯資料'}
+                        </button>
+                    </div>
+
+                    <div className="detail-hero">
+                        <img src={selectedRecord.coverUrl || DEFAULT_COVER} className="detail-cover-img" alt="封面" />
+                        <div className="detail-main">
+                            {isEditing ? (
+                                <div className="edit-form grid-2">
+                                    <div className="input-box" style={{ gridColumn: 'span 2' }}>
+                                        <label>📖 高清封面連結</label>
+                                        <input type="text" value={selectedRecord.coverUrl} onChange={(e) => setSelectedRecord({...selectedRecord, coverUrl: e.target.value})} placeholder="輸入圖片網址" />
+                                    </div>
+                                    <div className="input-box" style={{ gridColumn: 'span 2' }}>
+                                        <label>書名</label>
+                                        <input type="text" value={selectedRecord.title} onChange={(e) => setSelectedRecord({...selectedRecord, title: e.target.value})} />
+                                    </div>
+                                    <div className="input-box">
+                                        <label>作者</label>
+                                        <input type="text" value={selectedRecord.author} onChange={(e) => setSelectedRecord({...selectedRecord, author: e.target.value})} />
+                                    </div>
+                                    <div className="input-box">
+                                        <label>出版社</label>
+                                        <input type="text" value={selectedRecord.publisher} onChange={(e) => setSelectedRecord({...selectedRecord, publisher: e.target.value})} />
+                                    </div>
+                                    <div className="input-box">
+                                        <label>分類</label>
+                                        <input type="text" value={selectedRecord.category} onChange={(e) => setSelectedRecord({...selectedRecord, category: e.target.value})} />
+                                    </div>
+                                    <div className="input-box">
+                                        <label>閱讀完成日</label>
+                                        <input type="date" value={selectedRecord.completionDate} onChange={(e) => setSelectedRecord({...selectedRecord, completionDate: e.target.value})} />
+                                    </div>
+                                    <div className="input-box" style={{ gridColumn: 'span 2' }}>
+                                        <label>📝 AI 摘要精華</label>
+                                        <textarea rows="6" value={selectedRecord.summary} onChange={(e) => setSelectedRecord({...selectedRecord, summary: e.target.value})} />
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <h2 className="detail-title">{selectedRecord.title}</h2>
+                                    <p className="detail-meta-text">
+                                        {selectedRecord.author} | {selectedRecord.publisher} | {selectedRecord.category}
+                                    </p>
+                                    <p className="detail-meta-text" style={{ fontSize: '1rem', marginTop: '-1.5rem' }}>
+                                        📅 閱讀完成日：{selectedRecord.completionDate || '未記錄'}
+                                    </p>
+                                    <div className="detail-summary-section">
+                                        <h3>📝 AI 摘要精華</h3>
+                                        <p className="detail-summary-text">{selectedRecord.summary}</p>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

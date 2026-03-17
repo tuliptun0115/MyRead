@@ -1,0 +1,23 @@
+# 🛰️ MyRead 專案技術規範 (V1.0)
+
+## 📁 目錄結構規範
+- `/src/components`: 存放 UI 組件（如 BookCard, StatsBoard）
+- `/src/services`: 存放 API 調用邏輯 (如 apiService.js)
+- `/src/hooks`: 存放 自定義 React Hooks
+- `/src/assets`: 存放 靜態資源
+
+## 📝 命名慣例
+- **組件**: PascalCase (如 `BookListItem.jsx`)
+- **函式/變數**: camelCase (如 `fetchRecords`)
+- **CSS**: kebab-case (如 `.stats-container`)
+
+## 🛠️ 技術軍規
+1. **解耦**: UI 組件不得直接撰寫 `fetch` 或 `callGAS` 邏輯。
+2. **防禦性**: 所有 API 請求必須包含 `try-catch` 並提供 `toast` 提示。
+3. **註釋**: 關鍵業務邏輯（如 OCR 處理、書籍抓取）必須有繁體中文註釋。
+4. **狀態管理**: 優先使用 `useState` 與 `useEffect`。
+
+## 🎨 設計美學
+- 使用 **Glassmorphism (玻璃擬態)** 風格。
+- 配色方案：粉色系偏暗（#fb6f92, #ff85a1, #1a1a1a）。
+- 動畫：所有 Hover 與 Page Switch 需有微交互。
