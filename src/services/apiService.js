@@ -9,7 +9,7 @@ const apiService = {
   /**
    * 通用請求發送器
    */
-  async request(action, payload = {}) {
+  async request(action, payload = {}, auth = null) {
     if (!GAS_URL) {
       console.error('GAS_URL is not defined in .env');
       return { success: false, message: '系統環境設定錯誤' };
@@ -19,9 +19,9 @@ const apiService = {
       const response = await fetch(GAS_URL, {
         method: 'POST',
         headers: {
-          'Content-Type': 'text/plain', // GAS doPost 接收 JSON 需設為 text/plain 或不設
+          'Content-Type': 'text/plain',
         },
-        body: JSON.stringify({ action, payload }),
+        body: JSON.stringify({ action, payload, auth }),
       });
 
       if (!response.ok) {
@@ -52,36 +52,36 @@ const apiService = {
   /**
    * 圖片 OCR 辨識
    */
-  async performOCR(base64Data, mimeType = 'image/jpeg') {
-    return this.request('OCR', { base64: base64Data, mimeType });
+  async performOCR(base64Data, auth, mimeType = 'image/jpeg') {
+    return this.request('OCR', { base64: base64Data, mimeType }, auth);
   },
 
   /**
    * 搜尋書籍詳細資訊 (爬蟲)
    */
   async searchBook(title) {
-    return this.request('SEARCH_BOOK', { title });
+    return this.request('SEARCH_BOOK', { title }); // 搜尋目前不需 auth
   },
 
   /**
    * 產出 AI 摘要
    */
-  async generateSummary(bookContent) {
-    return this.request('AI_SUMMARY', { text: bookContent });
+  async generateSummary(bookContent, auth) {
+    return this.request('AI_SUMMARY', { text: bookContent }, auth);
   },
 
   /**
    * 提交新紀錄
    */
-  async submitRecord(formData) {
-    return this.request('SUBMIT', formData);
+  async submitRecord(formData, auth) {
+    return this.request('SUBMIT', formData, auth);
   },
 
   /**
    * 更新現有紀錄
    */
-  async updateRecord(formData) {
-    return this.request('UPDATE', formData);
+  async updateRecord(formData, auth) {
+    return this.request('UPDATE', formData, auth);
   }
 };
 

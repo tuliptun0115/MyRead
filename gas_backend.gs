@@ -4,6 +4,8 @@
 // ============================================================
 
 const SHEET_NAME = '閱讀紀錄';
+const CONFIG_SHEET = 'User_Config';
+const LOG_SHEET = 'Usage_Log';
 
 function getGeminiKey_() {
   const keysStr = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY') || '';
@@ -16,15 +18,85 @@ function getGeminiKey_() {
 
 function initSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // 1. 閱讀紀錄表
   let sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) {
-    const allSheets = ss.getSheets();
-    sheet = (allSheets.length > 0) ? allSheets[0] : ss.insertSheet(SHEET_NAME);
-  }
-  if (sheet.getLastRow() === 0) {
+    sheet = ss.insertSheet(SHEET_NAME);
     sheet.appendRow(['序號', '資料建立日', '書名', '作者', '書籍分類', '閱讀完成日', '出版社', 'AI摘要精華重點', '封面圖片']);
   }
+  
+  // 2. 用戶配置表
+  let configSheet = ss.getSheetByName(CONFIG_SHEET);
+  if (!configSheet) {
+    configSheet = ss.insertSheet(CONFIG_SHEET);
+    configSheet.appendRow(['帳號', '密碼', '每日上限', '身份', '最後更新']);
+    configSheet.appendRow(['tuliptun', '0000', 10, 'admin', new Date()]); // 預設帳號
+  }
+
+  // 3. 使用日誌表
+  let logSheet = ss.getSheetByName(LOG_SHEET);
+  if (!logSheet) {
+    logSheet = ss.insertSheet(LOG_SHEET);
+    logSheet.appendRow(['日期', '使用者', '計數']);
+  }
+
   return sheet;
+}
+
+/**
+ * 🔒 身份驗證與用量檢查
+ */
+function validateAuthAndUsage_(auth, action) {
+  if (!auth || !auth.username) return { success: false, message: '請先登入' };
+  
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const configSheet = ss.getSheetByName(CONFIG_SHEET);
+  const logSheet = ss.getSheetByName(LOG_SHEET);
+  
+  // 1. 驗證帳密
+  const configData = configSheet.getDataRange().getValues();
+  let userRow = -1;
+  let userLimit = 0;
+  for (let i = 1; i < configData.length; i++) {
+    if (configData[i][0] == auth.username && configData[i][1] == auth.password) {
+      userRow = i + 1;
+      userLimit = configData[i][2] || 10;
+      break;
+    }
+  }
+  if (userRow === -1) return { success: false, message: '帳號或密碼錯誤' };
+
+  // 2. 檢查每日額度 (僅針對 AI 與 提交動作)
+  if (['OCR', 'AI_SUMMARY', 'SUBMIT'].includes(action)) {
+    const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    const logData = logSheet.getDataRange().getValues();
+    let currentUsage = 0;
+    let logRow = -1;
+
+    for (let i = 1; i < logData.length; i++) {
+      let logDate = logData[i][0];
+      if (logDate instanceof Date) logDate = Utilities.formatDate(logDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      if (logDate == today && logData[i][1] == auth.username) {
+        currentUsage = logData[i][2];
+        logRow = i + 1;
+        break;
+      }
+    }
+
+    if (currentUsage >= userLimit) return { success: false, message: `今日使用額度已達上限 (${userLimit})` };
+
+    // 3. 增加用量紀錄
+    if (logRow !== -1) {
+      logSheet.getRange(logRow, 3).setValue(currentUsage + 1);
+    } else {
+      logSheet.appendRow([today, auth.username, 1]);
+    }
+    // 更新用戶表的最後更新時間
+    configSheet.getRange(userRow, 5).setValue(new Date());
+  }
+
+  return { success: true };
 }
 
 /**
@@ -94,7 +166,13 @@ function callGeminiSummary_(bookInfoText) {
 function doPost(e) {
   let request;
   try { request = JSON.parse(e.postData.contents); } catch (err) { return ContentService.createTextOutput(JSON.stringify({ success: false })).setMimeType(ContentService.MimeType.JSON); }
-  const { action, payload } = request;
+  const { action, payload, auth } = request;
+
+  // 全域檢查：除搜尋外，所有動作需驗證
+  if (action !== 'SEARCH_BOOK') {
+    const check = validateAuthAndUsage_(auth, action);
+    if (!check.success) return ContentService.createTextOutput(JSON.stringify(check)).setMimeType(ContentService.MimeType.JSON);
+  }
 
   if (action === 'OCR') return ContentService.createTextOutput(JSON.stringify(callGeminiOcr_(payload.base64, payload.mimeType))).setMimeType(ContentService.MimeType.JSON);
   if (action === 'AI_SUMMARY') return ContentService.createTextOutput(JSON.stringify(callGeminiSummary_(payload.text))).setMimeType(ContentService.MimeType.JSON);

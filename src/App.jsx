@@ -85,7 +85,7 @@ function App() {
             setOcrLoading(true);
             setToast('🔍 Gemini 1.5 辨識中...');
 
-            const ocrRes = await apiService.performOCR(b64Data);
+            const ocrRes = await apiService.performOCR(b64Data, auth);
             
             if (ocrRes.success) {
                 setFormData(prev => ({ 
@@ -118,7 +118,7 @@ function App() {
                 // 如果搜尋結果沒有摘要，或摘要太短，則啟動 AI 深度創作
                 if (!finalSummary || finalSummary.length < 50) {
                     setToast('✍️ Gemini 2.5 正在閱讀並撰寫深度摘要...');
-                    const aiRes = await apiService.generateSummary(`書名：${ocrRes.title}，作者：${ocrRes.author || '未知'}`);
+                    const aiRes = await apiService.generateSummary(`書名：${ocrRes.title}，作者：${ocrRes.author || '未知'}`, auth);
                     if (aiRes && aiRes.summary) {
                         setFormData(prev => ({ ...prev, summary: aiRes.summary }));
                         setToast('✨ 高品質紀錄已就緒！');
@@ -144,7 +144,7 @@ function App() {
         
         setLoading(true);
         try {
-            const res = await apiService.submitRecord(formData);
+            const res = await apiService.submitRecord(formData, auth);
             if (res.success) {
                 setToast('✅ 紀錄已成功存檔！');
                 setFormData({ title: '', subtitle: '', author: '', publisher: '', category: '', completionDate: '', summary: '', coverUrl: '' });
@@ -306,7 +306,7 @@ function App() {
                         <button className="nav-btn" onClick={async () => {
                             if (isEditing) {
                                 setLoading(true);
-                                const res = await apiService.updateRecord(selectedRecord);
+                                const res = await apiService.updateRecord(selectedRecord, auth);
                                 if (res.success) {
                                     setToast('✅ 資料更新成功！');
                                     fetchRecords();
