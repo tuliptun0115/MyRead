@@ -1,0 +1,32 @@
+# 🛰️ MyRead 專案技術規範 (V2.0)
+
+## 📁 專案資產與文檔 (Docs)
+- 所有核心資產文件存放於 `/docs`︰
+  - `PRD.md`: 產品需求與願景
+  - `TECH_DOC.md`: 技術架構、API、Schema
+  - `UI_UX_GUIDE.md`: 配色、組件行為、RWD
+  - `CHANGELOG.md`: 版本演進紀錄
+  - `.cursorrules`: 技術規範 (本檔案)
+
+## 📁 目錄結構
+- `/src/components`: UI 組件 (如 BookCard, StatsBoard)
+- `/src/services`: API 調用邏輯 (如 apiService.js)
+- `/src/hooks`: 自定義 React Hooks
+- `/src/assets`: 靜態資源
+
+## 📝 命名慣例 (Naming)
+- **組件**: PascalCase (如 `BookListItem.jsx`)
+- **函式/變數**: camelCase (如 `fetchRecords`)
+- **CSS**: kebab-case (針對 Vanilla CSS 類名)
+
+## 🛠️ 技術軍規 (Engineering Rules)
+1. **解耦 (Decoupling)**: UI 組件不得直接撰寫 `fetch` 或 `callGAS` 邏輯，需經由 `apiService`。
+2. **防禦性 (Defensive Programming)**: 所有 API 請求必須包含完整 `try-catch` 並提供 `toast` 友好提示。
+3. **註釋 (Documentation)**: 關鍵業務邏輯（如 OCR 處理、書籍抓取、Auth 驗證）必須有繁體中文註釋。
+4. **狀態管理**: 優先使用 `useState` 與 `context` 減少過度 Prop Drilling。
+5. **模型名稱**: 固定使用 `gemini-2.5-flash` (OCR/Summary 用) 以保證回應速度與準確率。
+
+## 🎨 設計美學 (Aesthetics)
+- 嚴格遵守 **Glassmorphism (玻璃擬態)** 風格。
+- 遵循 `UI_UX_GUIDE.md` 定義的配色 (#fb6f92, #fbfbfd)。
+- 動畫：所有互動動作 (Hover, Click) 需有微交互回饋。

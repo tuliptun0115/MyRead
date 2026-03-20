@@ -64,6 +64,13 @@ const apiService = {
   },
 
   /**
+   * 網址解析：從網頁內容提取書籍資訊
+   */
+  async scrapeUrl(url, auth) {
+    return this.request('SCRAPE_URL', { url }, auth);
+  },
+
+  /**
    * 產出 AI 摘要
    */
   async generateSummary(bookContent, auth) {

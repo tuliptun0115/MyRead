@@ -4,6 +4,7 @@ import apiService from './services/apiService';
 import { BookIcon, CameraIcon } from './components/Icons';
 import BookListItem from './components/BookListItem';
 import PieChart from './components/PieChart';
+import YearlyChart from './components/YearlyChart';
 
 const DEFAULT_COVER = import.meta.env.VITE_DEFAULT_COVER_URL || 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=600&auto=format&fit=crop';
 
@@ -42,6 +43,7 @@ function App() {
         category: '', completionDate: '', summary: '', coverUrl: ''
     });
     const [showStats, setShowStats] = useState(false);
+    const [bookUrl, setBookUrl] = useState('');
 
     const fetchRecords = async () => {
         setFetching(true);
@@ -83,7 +85,7 @@ function App() {
             
             setFormData(prev => ({ ...prev, coverUrl: b64WithPrefix }));
             setOcrLoading(true);
-            setToast('🔍 Gemini 1.5 辨識中...');
+            setToast('🔍 Gemini 辨識中...');
 
             const ocrRes = await apiService.performOCR(b64Data, auth);
             
@@ -97,42 +99,70 @@ function App() {
                     completionDate: new Date().toISOString().split('T')[0]
                 }));
                 
-                setToast(`📚 找到《${ocrRes.title}》，正在檢索資料...`);
+                setToast(`📚 找到《${ocrRes.title}》，同步網路資料...`);
                 
-                // 同步進行搜尋與 AI 摘要生成
                 const searchRes = await apiService.searchBook(ocrRes.title);
-                let finalSummary = '';
+                let scrapedInfo = `書名: ${ocrRes.title}\n作者: ${ocrRes.author}`;
 
                 if (searchRes.success && searchRes.data) {
-                    finalSummary = searchRes.data.summary || '';
+                    scrapedInfo += `\n簡介: ${searchRes.data.summary}`;
                     setFormData(prev => ({
                         ...prev,
                         coverUrl: searchRes.data.coverUrl || prev.coverUrl,
-                        summary: finalSummary,
                         author: searchRes.data.author || prev.author,
                         publisher: searchRes.data.publisher || prev.publisher,
                         category: searchRes.data.category || prev.category
                     }));
                 }
 
-                // 如果搜尋結果沒有摘要，或摘要太短，則啟動 AI 深度創作
-                if (!finalSummary || finalSummary.length < 50) {
-                    setToast('✍️ Gemini 2.5 正在閱讀並撰寫深度摘要...');
-                    const aiRes = await apiService.generateSummary(`書名：${ocrRes.title}，作者：${ocrRes.author || '未知'}`, auth);
-                    if (aiRes && aiRes.summary) {
-                        setFormData(prev => ({ ...prev, summary: aiRes.summary }));
-                        setToast('✨ 高品質紀錄已就緒！');
-                    } else {
-                        setToast('✅ 辨識完成！');
-                    }
+                setToast('✍️ AI 正在濃縮精華內容 (100字內)...');
+                const aiRes = await apiService.generateSummary(scrapedInfo, auth);
+                if (aiRes && aiRes.summary) {
+                    setFormData(prev => ({ ...prev, summary: aiRes.summary }));
+                    setToast('✅ 辨識與濃縮完成！');
                 } else {
-                    setToast('✅ 資料同步完成！');
+                    setToast('✅ 辨識完成！');
                 }
             } else {
                 setToast(`❌ 辨識失敗：${ocrRes.message || '連線超時'}`);
             }
         } catch (err) {
             setToast('❌ 圖片處理異常');
+        } finally {
+            setOcrLoading(false);
+        }
+    };
+
+    const handleUrlInquiry = async () => {
+        if (!bookUrl) return setToast('⚠️ 請先輸入網址');
+        setOcrLoading(true);
+        setToast('🌐 正在解析網頁內容...');
+        
+        try {
+            const res = await apiService.scrapeUrl(bookUrl, auth);
+            if (res.success) {
+                setFormData(prev => ({
+                    ...prev,
+                    title: res.title || '',
+                    author: res.author || '',
+                    publisher: res.publisher || '',
+                    category: res.category || '',
+                    coverUrl: res.coverUrl || '',
+                    completionDate: new Date().toISOString().split('T')[0]
+                }));
+
+                setToast('✍️ AI 正在濃縮精華內容 (100字內)...');
+                const aiRes = await apiService.generateSummary(res.rawDescription || res.title, auth);
+                if (aiRes && aiRes.summary) {
+                    setFormData(prev => ({ ...prev, summary: aiRes.summary }));
+                }
+                setToast('✅ 網址解析與濃縮完成！');
+                setBookUrl(''); // 清空
+            } else {
+                setToast(`❌ 解析失敗: ${res.message}`);
+            }
+        } catch (e) {
+            setToast('❌ 網址解析異常');
         } finally {
             setOcrLoading(false);
         }
@@ -195,6 +225,7 @@ function App() {
                 <nav className="page-nav">
                     <button className={`nav-btn ${currentPage === 'home' ? 'active' : ''}`} onClick={() => setCurrentPage('home')}>首頁</button>
                     <button className={`nav-btn ${currentPage === 'list' ? 'active' : ''}`} onClick={() => setCurrentPage('list')}>閱讀紀錄</button>
+                    <button className={`nav-btn ${currentPage === 'stats' ? 'active' : ''}`} onClick={() => setCurrentPage('stats')}>數據中心</button>
                     <button className="nav-btn logout" onClick={() => { setAuth(null); localStorage.removeItem('myread_auth'); }}>登出</button>
                 </nav>
             </div>
@@ -205,20 +236,7 @@ function App() {
                 <>
                     <div className="home-stats-line">
                         <div className="home-stats-text">累計閱讀<span>{records.length}</span>本</div>
-                        <button className="nav-btn secondary" onClick={() => setShowStats(!showStats)}>
-                            {showStats ? '隱藏統計' : '詳細統計'}
-                        </button>
                     </div>
-
-                    {showStats && (
-                        <div className="stats-wrapper" style={{ animation: 'slideUp 0.4s ease-out' }}>
-                            <PieChart data={Object.entries(records.reduce((acc, r) => {
-                                const cat = getMainCategory(r.category);
-                                acc[cat] = (acc[cat] || 0) + 1;
-                                return acc;
-                            }, {})).sort((a,b) => b[1]-a[1])} />
-                        </div>
-                    )}
 
                     <div className="form-container">
                         <form onSubmit={handleSubmit}>
@@ -238,8 +256,21 @@ function App() {
                                     </label>
                                 </div>
                                 <div className="input-box" style={{ justifyContent: 'center' }}>
-                                    <label>📖 封面連結</label>
-                                    <input name="coverUrl" type="text" value={formData.coverUrl} onChange={handleInputChange} placeholder="自動填入或手動輸入網址" />
+                                    <label>🔗 輸入書籍介紹網址</label>
+                                    <input 
+                                        name="bookUrl" 
+                                        type="text" 
+                                        value={bookUrl} 
+                                        onChange={(e) => setBookUrl(e.target.value)} 
+                                        placeholder="https://www.books.com.tw/..." 
+                                    />
+                                    <div style={{ marginTop: '12px' }}>
+                                        <label>📖 封面連結 (自動填入/手動修改)</label>
+                                        <input name="coverUrl" type="text" value={formData.coverUrl} onChange={handleInputChange} placeholder="自動填入或手動輸入網址" />
+                                    </div>
+                                    <button type="button" onClick={handleUrlInquiry} className="nav-btn" style={{ marginTop: '15px', width: '100%', height: '42px', background: 'rgba(251, 111, 146, 0.1)' }}>
+                                        🚀 開始解析資料
+                                    </button>
                                 </div>
                             </div>
 
@@ -289,6 +320,25 @@ function App() {
                         </div>
                     )}
                 </>
+            )}
+
+            {currentPage === 'stats' && (
+                <div className="stats-container" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                    <div className="home-stats-line" style={{ justifyContent: 'center', marginBottom: '2rem' }}>
+                        <div className="home-stats-text">累計閱讀<span>{records.length}</span>本</div>
+                    </div>
+                    <div className="stats-item" style={{ width: '100%', marginBottom: '2rem' }}>
+                        <h3 style={{ marginBottom: '1.5rem', fontSize: '1.4rem' }}>📚 分類佔比</h3>
+                        <PieChart data={Object.entries(records.reduce((acc, r) => {
+                            const cat = getMainCategory(r.category);
+                            acc[cat] = (acc[cat] || 0) + 1;
+                            return acc;
+                        }, {})).sort((a,b) => b[1]-a[1])} />
+                    </div>
+                    <div className="stats-item" style={{ width: '100%' }}>
+                        <YearlyChart records={records} />
+                    </div>
+                </div>
             )}
 
             {currentPage === 'list' && (

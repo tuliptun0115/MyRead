@@ -127,18 +127,20 @@ function callGeminiOcr_(base64Data, mimeType) {
 }
 
 /**
- * 生成 AI 深度摘要：增加 tokens 避免截斷
+ * 生成 AI 濃縮摘要：限制在 100 字內
  */
-function callGeminiSummary_(bookInfoText) {
+function callGeminiSummary_(content) {
   const GEMINI_API_KEY = getGeminiKey_();
   if (!GEMINI_API_KEY) return { summary: '' };
   const model = 'gemini-2.5-flash'; 
   const apiVersion = 'v1beta';
   const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
   
-  const prompt = `你是一位專業且具洞察力的說書人。根據書名與作者：${bookInfoText}。
-請撰寫一段超過 300 字、具深度的書評摘要，包含「核心主旨」、「關鍵洞察」與「啟發結語」。
-要求：文字要優美流暢，必須給出完整的結局，不可中途斷句。只輸出內容，不需贅字。`;
+  const prompt = `你是一位專業的書籍分析師。根據以下書籍資訊：
+${content}
+請寫一段「精華摘要」，包含核心重點，嚴格限制在 100 字以內 (繁體中文)。
+要求：必須是一個完整的段落，不可在句子中途斷開，確保內容完整。
+只輸出內容，不要標題或贅字。`;
 
   try {
     const res = UrlFetchApp.fetch(url, {
@@ -146,7 +148,7 @@ function callGeminiSummary_(bookInfoText) {
       contentType: 'application/json',
       payload: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 2000 }
+        generationConfig: { temperature: 0.5, maxOutputTokens: 500 }
       }),
       muteHttpExceptions: true
     });
@@ -157,6 +159,67 @@ function callGeminiSummary_(bookInfoText) {
     }
   } catch(e) { Logger.log("Summary Err: " + e) }
   return { summary: '' };
+}
+
+/**
+ * 網址解析：從網頁內容提取書籍資訊 (Gemini 驅動)
+ */
+function handleUrlScrape_(bookUrl) {
+  const GEMINI_API_KEY = getGeminiKey_();
+  if (!GEMINI_API_KEY) return { success: false, message: 'API key not set' };
+
+  try {
+    // 增加 User-Agent 避免被擋，並加入更詳細的錯誤判斷
+    const options = {
+      muteHttpExceptions: true,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
+      }
+    };
+    
+    let response = UrlFetchApp.fetch(bookUrl, options);
+    let code = response.getResponseCode();
+    
+    // 備援機制：如果產品頁 403 被擋，嘗試透過「搜尋產品 ID」繞過
+    if (code === 403 && bookUrl.includes('books.com.tw')) {
+      const idMatch = bookUrl.match(/\/products\/(\d+)/);
+      if (idMatch) {
+         const searchUrl = `https://search.books.com.tw/search/query/key/${idMatch[1]}/cat/all`;
+         response = UrlFetchApp.fetch(searchUrl, options);
+         code = response.getResponseCode();
+      }
+    }
+
+    if (code !== 200) return { success: false, message: `無法存取該網址 (HTTP ${code})。請確認網址是否正確，或該站點阻擋了爬蟲。` };
+    
+    const htmlSnippet = response.getContentText().substring(0, 50000); 
+    
+    const model = 'gemini-2.5-flash';
+    const apiVersion = 'v1beta';
+    const api_url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+
+    const prompt = `這是一個書籍介紹網頁的 HTML 內容。請從中提取：書名 (title)、作者 (author)、出版社 (publisher)、分類 (category)、封圖連結 (coverUrl)、原始簡介 (rawDescription)。
+請僅回傳 JSON 格式，不要包含 Markdown 標解：
+{"title": "...", "author": "...", "publisher": "...", "category": "...", "coverUrl": "...", "rawDescription": "..."}
+
+HTML 內容如下：
+${htmlSnippet}`;
+
+    const payload = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, response_mime_type: "application/json" }
+    };
+
+    const res = UrlFetchApp.fetch(api_url, { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
+    if (res.getResponseCode() === 200) {
+      const result = JSON.parse(JSON.parse(res.getContentText()).candidates[0].content.parts[0].text);
+      return { success: true, ...result };
+    }
+    return { success: false, message: 'AI 解析失敗' };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
 }
 
 // ------------------------------------------------------------
@@ -175,6 +238,7 @@ function doPost(e) {
   }
 
   if (action === 'OCR') return ContentService.createTextOutput(JSON.stringify(callGeminiOcr_(payload.base64, payload.mimeType))).setMimeType(ContentService.MimeType.JSON);
+  if (action === 'SCRAPE_URL') return ContentService.createTextOutput(JSON.stringify(handleUrlScrape_(payload.url))).setMimeType(ContentService.MimeType.JSON);
   if (action === 'AI_SUMMARY') return ContentService.createTextOutput(JSON.stringify(callGeminiSummary_(payload.text))).setMimeType(ContentService.MimeType.JSON);
   if (action === 'SEARCH_BOOK') return ContentService.createTextOutput(JSON.stringify({ success: true, data: scrapeBooksComTw_(payload.title) })).setMimeType(ContentService.MimeType.JSON);
   if (action === 'SUBMIT') return handleRecordSubmission_(payload);

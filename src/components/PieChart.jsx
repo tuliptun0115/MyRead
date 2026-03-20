@@ -7,7 +7,7 @@ const PieChart = ({ data }) => {
     let cumulativePercent = 0;
 
     return (
-        <div className="pie-chart-container" style={{ display: 'flex', alignItems: 'center', gap: '20px', background: 'rgba(255,255,255,0.05)', padding: '20px', borderRadius: '15px', border: '1px solid rgba(255,255,255,0.1)' }}>
+        <div className="pie-chart-container" style={{ display: 'flex', alignItems: 'center', gap: '30px', padding: '10px', width: '100%', justifyContent: 'center' }}>
             <svg viewBox="-1 -1 2 2" style={{ width: '150px', transform: 'rotate(-90deg)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>
                 {data.map(([label, value], i) => {
                     const startX = Math.cos(2 * Math.PI * cumulativePercent);
@@ -23,10 +23,10 @@ const PieChart = ({ data }) => {
             </svg>
             <div className="pie-legend" style={{ textAlign: 'left' }}>
                 {data.slice(0, 5).map(([label, value], i) => (
-                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', fontSize: '12px' }}>
-                        <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: COLORS[i % COLORS.length] }}></div>
-                        <span style={{ opacity: 0.8 }}>{label}</span>
-                        <span style={{ fontWeight: 'bold' }}>{Math.round(value / total * 100)}%</span>
+                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px', fontSize: '18px' }}>
+                        <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: COLORS[i % COLORS.length] }}></div>
+                        <span style={{ opacity: 0.9 }}>{label}</span>
+                        <span style={{ fontWeight: 'bold', marginLeft: 'auto' }}>{Math.round(value / total * 100)}%</span>
                     </div>
                 ))}
             </div>
