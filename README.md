@@ -27,6 +27,19 @@
 
 ---
 
+## API 與模型使用說明
+
+調用模型：
+Web Speech API (TTS) 原生語音引擎
+Gemini 2.5 Flash API
+
+API KEY：Google AI Studio，免費版
+
+預估每日使用：
+免費額度，每日可使用1000次，每分鍾最多15次
+
+---
+
 ## 安裝步驟
 
 ### 事前準備

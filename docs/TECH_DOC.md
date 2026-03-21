@@ -6,14 +6,15 @@
 - **Database**: Google Sheets (Persistence Layer).
 - **AI Engine**: **Gemini 2.5 Flash** (Primary for OCR, Summarization, and Intent Analysis).
 
-## 2. API 協議 (V4.0 - Auth & Limits Support)
-前後端統一使用 JSON 片段傳輸，基於 `POST` 的單一入口點。
+## 2. API 協議 (V4.1 - Unified AI & Concurrency Support)
+前後端統一使用 JSON 片段傳輸，基於 `POST` 的單一入口點。所有 AI 功能均具備備援輪轉與連網搜尋能力。
 
 ### A. 通訊 ACTIONS
-- `OCR`: 圖片 Base64 轉文字資訊。
+- `OCR`: 圖片 Base64 轉文字資訊。使用 Unified AI Bridge 確保穩定度。
 - `SEARCH_BOOK`: 爬取博客來基本資訊。
-- `AI_SUMMARY`: 生成 300+ 字深度導讀（優化 Token 限制）。
-- `SUBMIT`: 寫入新紀錄 (自動生成 BKxx 智慧序號)。
+- `SCRAPE_URL`: 從 URL 提取書籍資訊。具備 Web Scrape + AI Search 雙重備援機制。
+- `AI_SUMMARY`: 生成 100 字內精華摘要。使用 Unified AI Bridge。
+- `SUBMIT`: 寫入新紀錄 (自動生成 BKxx 智慧序號，導入 `LockService` 防止衝突)。
 - `UPDATE`: 修改現有紀錄 (基於 ID 匹配)。
 
 ### B. 身份驗證與用量限制

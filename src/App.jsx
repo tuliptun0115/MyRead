@@ -37,13 +37,13 @@ function App() {
     const [currentPage, setCurrentPage] = useState('home'); 
     const [selectedRecord, setSelectedRecord] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
+    const [inputMode, setInputMode] = useState('upload'); // 'upload' or 'url'
+    const [bookUrl, setBookUrl] = useState('');
 
     const [formData, setFormData] = useState({
         title: '', subtitle: '', author: '', publisher: '', 
         category: '', completionDate: '', summary: '', coverUrl: ''
     });
-    const [showStats, setShowStats] = useState(false);
-    const [bookUrl, setBookUrl] = useState('');
 
     const fetchRecords = async () => {
         setFetching(true);
@@ -117,7 +117,7 @@ function App() {
 
                 setToast('✍️ AI 正在濃縮精華內容 (100字內)...');
                 const aiRes = await apiService.generateSummary(scrapedInfo, auth);
-                if (aiRes && aiRes.summary) {
+                if (aiRes.success && aiRes.summary) {
                     setFormData(prev => ({ ...prev, summary: aiRes.summary }));
                     setToast('✅ 辨識與濃縮完成！');
                 } else {
@@ -148,16 +148,12 @@ function App() {
                     publisher: res.publisher || '',
                     category: res.category || '',
                     coverUrl: res.coverUrl || '',
+                    summary: res.summary || '', // 現在後端已經直接回傳 100 字摘要了！
                     completionDate: new Date().toISOString().split('T')[0]
                 }));
 
-                setToast('✍️ AI 正在濃縮精華內容 (100字內)...');
-                const aiRes = await apiService.generateSummary(res.rawDescription || res.title, auth);
-                if (aiRes && aiRes.summary) {
-                    setFormData(prev => ({ ...prev, summary: aiRes.summary }));
-                }
-                setToast('✅ 網址解析與濃縮完成！');
-                setBookUrl(''); // 清空
+                setToast('✅ 網頁資料解析完成！');
+                setBookUrl(''); 
             } else {
                 setToast(`❌ 解析失敗: ${res.message}`);
             }
@@ -241,36 +237,47 @@ function App() {
                     <div className="form-container">
                         <form onSubmit={handleSubmit}>
                             <div className="form-grid-layout">
-                                <div className="upload-section">
-                                    <label className="upload-label">
-                                        {formData.coverUrl ? (
-                                            <img src={formData.coverUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => e.target.src = DEFAULT_COVER} />
-                                        ) : (
-                                            <div className="upload-placeholder">
-                                                <CameraIcon />
-                                                <span style={{ fontSize: '0.9rem', textAlign: 'center' }}>上傳書籍封面</span>
-                                                {ocrLoading && <div className="ocr-loading"><span>分析中...</span></div>}
-                                            </div>
-                                        )}
-                                        <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden-input" />
-                                    </label>
-                                </div>
-                                <div className="input-box" style={{ justifyContent: 'center' }}>
-                                    <label>🔗 輸入書籍介紹網址</label>
-                                    <input 
-                                        name="bookUrl" 
-                                        type="text" 
-                                        value={bookUrl} 
-                                        onChange={(e) => setBookUrl(e.target.value)} 
-                                        placeholder="https://www.books.com.tw/..." 
-                                    />
-                                    <div style={{ marginTop: '12px' }}>
-                                        <label>📖 封面連結 (自動填入/手動修改)</label>
-                                        <input name="coverUrl" type="text" value={formData.coverUrl} onChange={handleInputChange} placeholder="自動填入或手動輸入網址" />
+                                <div className="input-method-stack">
+                                    <div className="upload-section">
+                                        <label className="upload-label">
+                                            {formData.coverUrl && formData.coverUrl.startsWith('data:') ? (
+                                                <img src={formData.coverUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => e.target.src = DEFAULT_COVER} />
+                                            ) : (
+                                                <div className="upload-placeholder">
+                                                    <CameraIcon />
+                                                    <span style={{ fontSize: '0.9rem', textAlign: 'center' }}>上傳書籍封面圖</span>
+                                                    {ocrLoading && <div className="ocr-loading"><span>分析中...</span></div>}
+                                                </div>
+                                            )}
+                                            <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden-input" />
+                                        </label>
                                     </div>
-                                    <button type="button" onClick={handleUrlInquiry} className="nav-btn" style={{ marginTop: '15px', width: '100%', height: '42px', background: 'rgba(251, 111, 146, 0.1)' }}>
-                                        🚀 開始解析資料
-                                    </button>
+                                    
+                                    <div className="input-box url-input-area" style={{ marginTop: '0.5rem' }}>
+                                        <label>或者，🔗 輸入書籍介紹網址</label>
+                                        <input 
+                                            name="bookUrl" 
+                                            type="text" 
+                                            value={bookUrl} 
+                                            onChange={(e) => setBookUrl(e.target.value)} 
+                                            placeholder="https://www.books.com.tw/..." 
+                                        />
+                                        <button type="button" onClick={handleUrlInquiry} className="nav-btn action-btn" style={{ marginTop: '10px', width: '100%', height: '40px' }} disabled={ocrLoading}>
+                                            {ocrLoading ? '🚀 正在解析中...' : '🚀 解析網頁資料'}
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div className="preview-shared-section">
+                                    <div className="mini-preview-card">
+                                        <div className="preview-label">當前解析結果預覽</div>
+                                        <img src={formData.coverUrl || DEFAULT_COVER} alt="Cover Preview" onError={(e) => e.target.src = DEFAULT_COVER} />
+                                        <div className="mini-info">
+                                            <div className="mini-title">{formData.title || '尚未輸入書名'}</div>
+                                            <div className="mini-author">{formData.author || '辨識中...'}</div>
+                                            <div className="mini-meta">{formData.publisher} / {formData.category}</div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
