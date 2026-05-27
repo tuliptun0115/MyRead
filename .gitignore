@@ -20,3 +20,11 @@ npm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# AI Meta-data
+.claude/
+.gemini/
+.codex/
+.ag_skill_hub/
+.brain/
+.agent/

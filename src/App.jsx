@@ -85,7 +85,7 @@ function App() {
             
             setFormData(prev => ({ ...prev, coverUrl: b64WithPrefix }));
             setOcrLoading(true);
-            setToast('🔍 Gemini 辨識中...');
+            setToast('🔍 封面辨識中 (Gemini 2.5)...');
 
             const ocrRes = await apiService.performOCR(b64Data, auth);
             
@@ -99,29 +99,24 @@ function App() {
                     completionDate: new Date().toISOString().split('T')[0]
                 }));
                 
-                setToast(`📚 找到《${ocrRes.title}》，同步網路資料...`);
+                setToast(`📚 找到《${ocrRes.title}》，正在檢索快取...`);
                 
-                const searchRes = await apiService.searchBook(ocrRes.title);
-                let scrapedInfo = `書名: ${ocrRes.title}\n作者: ${ocrRes.author}`;
+                // ⚡ 優化：利用後端的 SCRAPE_URL (已帶快取檢查) 傳入書名進行精確檢索
+                const searchRes = await apiService.scrapeUrl(ocrRes.title, auth);
 
-                if (searchRes.success && searchRes.data) {
-                    scrapedInfo += `\n簡介: ${searchRes.data.summary}`;
+                if (searchRes.success) {
+                    const isCache = searchRes.actionType === 'CACHE_HIT';
                     setFormData(prev => ({
                         ...prev,
-                        coverUrl: searchRes.data.coverUrl || prev.coverUrl,
-                        author: searchRes.data.author || prev.author,
-                        publisher: searchRes.data.publisher || prev.publisher,
-                        category: searchRes.data.category || prev.category
+                        coverUrl: searchRes.coverUrl || prev.coverUrl,
+                        author: searchRes.author || prev.author,
+                        publisher: searchRes.publisher || prev.publisher,
+                        category: searchRes.category || prev.category,
+                        summary: searchRes.summary || prev.summary
                     }));
-                }
-
-                setToast('✍️ AI 正在濃縮精華內容 (100字內)...');
-                const aiRes = await apiService.generateSummary(scrapedInfo, auth);
-                if (aiRes.success && aiRes.summary) {
-                    setFormData(prev => ({ ...prev, summary: aiRes.summary }));
-                    setToast('✅ 辨識與濃縮完成！');
+                    setToast(isCache ? '⚡ 命中快取！已秒速恢復細節。' : '✅ 辨識與搜尋網頁資料完成！');
                 } else {
-                    setToast('✅ 辨識完成！');
+                    setToast('✅ 辨識完成，請手動校對內容。');
                 }
             } else {
                 setToast(`❌ 辨識失敗：${ocrRes.message || '連線超時'}`);
@@ -141,6 +136,7 @@ function App() {
         try {
             const res = await apiService.scrapeUrl(bookUrl, auth);
             if (res.success) {
+                const isCache = res.actionType === 'CACHE_HIT';
                 setFormData(prev => ({
                     ...prev,
                     title: res.title || '',
@@ -148,17 +144,20 @@ function App() {
                     publisher: res.publisher || '',
                     category: res.category || '',
                     coverUrl: res.coverUrl || '',
-                    summary: res.summary || '', // 現在後端已經直接回傳 100 字摘要了！
+                    summary: res.summary || '',
                     completionDate: new Date().toISOString().split('T')[0]
                 }));
 
-                setToast('✅ 網頁資料解析完成！');
+                setToast(isCache ? '⚡ 快取命中！(0 Token 消耗)' : '✅ 網頁資料解析完成！');
+                if (isCache) {
+                    console.log('Detected cache hit from backend logic.');
+                }
                 setBookUrl(''); 
             } else {
                 setToast(`❌ 解析失敗: ${res.message}`);
             }
         } catch (e) {
-            setToast('❌ 網址解析異常');
+            setToast('❌ 網頁解析異常');
         } finally {
             setOcrLoading(false);
         }
