@@ -16,6 +16,10 @@ function getGeminiKey_() {
   return keys[randomIndex];
 }
 
+function getFirecrawlKey_() {
+  return PropertiesService.getScriptProperties().getProperty('FIRECRAWL_API_KEY') || '';
+}
+
 function initSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
@@ -182,23 +186,29 @@ function fetchGoogleBooks_(query) {
 }
 
 /**
- * 🧹 HTML 清洗：移除 Script, Style, Nav 等無用標籤，優化 2026 版
+ * 🔥 Firecrawl 抓取：繞過博客來反爬蟲機制，直接取得商品頁的乾淨內容
  */
-function cleanHtml_(html) {
-  if (!html) return "";
-  let clean = html
-    .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gi, "")
-    .replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, "")
-    .replace(/<!--[\s\S]*?-->/g, "");
-  
-  clean = clean
-    .replace(/<nav\b[^>]*>([\s\S]*?)<\/nav>/gi, "")
-    .replace(/<footer\b[^>]*>([\s\S]*?)<\/footer>/gi, "");
-
-  clean = clean.replace(/\s+/g, " ").trim();
-  
-  // 2026 優化：僅保留前 6000 字元，足以涵蓋 Metadata 與摘要
-  return clean.substring(0, 6000); 
+function firecrawlScrape_(url) {
+  const apiKey = getFirecrawlKey_();
+  if (!apiKey) return { success: false, message: 'Firecrawl API key 未設定' };
+  try {
+    const res = UrlFetchApp.fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + apiKey },
+      payload: JSON.stringify({ url: url, formats: ['markdown'], onlyMainContent: true }),
+      muteHttpExceptions: true
+    });
+    if (res.getResponseCode() === 200) {
+      const json = JSON.parse(res.getContentText());
+      if (json.success && json.data && json.data.markdown) {
+        return { success: true, markdown: json.data.markdown.substring(0, 8000) };
+      }
+    }
+    return { success: false, message: 'Firecrawl 回應異常: ' + res.getResponseCode() };
+  } catch (e) {
+    return { success: false, message: 'Firecrawl 例外: ' + e.message };
+  }
 }
 
 /**
@@ -262,54 +272,49 @@ function parseAiJson_(text) {
   return null;
 }
 
-function handleUrlScrape_(bookUrl) {
+function handleUrlScrape_(bookInput) {
   try {
     // Phase 1: 快取首查 (0 成本)
-    const cache = checkSheetCache_(bookUrl);
+    const cache = checkSheetCache_(bookInput);
     if (cache) return cache;
 
-    // Phase 2: 博客來搜尋頁繞道 (免費爬蟲)
-    let targetUrl = bookUrl;
-    const booksTwMatch = bookUrl.match(/books\.com\.tw\/products\/([A-Za-z0-9]+)/);
-    if (booksTwMatch) {
-      targetUrl = `https://search.books.com.tw/search/query/key/${booksTwMatch[1]}/cat/all`;
+    // Phase 2: 若輸入是網址，用 Firecrawl 直接抓商品頁 (繞過博客來反爬蟲)
+    // 若輸入只是書名 (例如 OCR 辨識後的自動查詢)，跳過抓取，直接進 Phase 4 連網搜尋
+    const isUrl = /^https?:\/\//i.test(bookInput);
+    let contentForAi = '';
+    let debugPhase = 'skip_fetch(not_url)';
+    if (isUrl) {
+      const fc = firecrawlScrape_(bookInput);
+      debugPhase = 'firecrawl:' + (fc.success ? 'ok len=' + fc.markdown.length : 'FAIL ' + fc.message);
+      if (fc.success) contentForAi = fc.markdown;
     }
-
-    const options = {
-      muteHttpExceptions: true,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
-      }
-    };
-    
-    let response = UrlFetchApp.fetch(targetUrl, options);
-    let htmlContent = "";
-    if (response.getResponseCode() === 200) {
-      htmlContent = cleanHtml_(response.getContentText());
-    }
+    Logger.log('[SCRAPE_URL] input=%s isUrl=%s phase=%s', bookInput, isUrl, debugPhase);
 
     let aiRes;
-    
-    // Phase 3: Gemini 2.5 Flash 解析 HTML (低成本調用)
-    if (htmlContent && htmlContent.length > 200) {
-      const prompt = `請從 HTML 提取書籍 JSON (title, author, publisher, category, coverUrl, summary)。HTML:${htmlContent}`;
+
+    // Phase 3: Gemini 2.5 Flash 解析 Firecrawl 抓回的乾淨內容 (低成本調用)
+    if (contentForAi && contentForAi.length > 100) {
+      const prompt = `你是書籍資料整理助手。請閱讀以下書籍頁面內容，回傳純 JSON（不要 Markdown 標記），欄位為 title, author, publisher, category, coverUrl, summary。summary 務必填寫：優先使用頁面中的內容簡介／書籍簡介，若找不到明確簡介，請自行根據頁面內容統整 100~150 字的重點摘要，不可留空。內容:${contentForAi}`;
       aiRes = callGemini_(prompt);
+      Logger.log('[SCRAPE_URL] Phase3 aiRes.success=%s', aiRes && aiRes.success);
     }
 
-    // Phase 4: 連網搜尋終極備援 (高成本，僅在必要時觸發)
+    // Phase 4: 連網搜尋終極備援 (高成本，僅在必要時觸發；書名輸入必經此步)
     if (!aiRes || !aiRes.success || !aiRes.text || aiRes.text.length < 30) {
-      const searchPrompt = `連網搜尋書籍資訊並回傳 JSON: ${bookUrl}`;
-      aiRes = callGemini_(searchPrompt, null, null, true); 
+      debugPhase += ' -> fallback_search';
+      const searchPrompt = `連網搜尋書籍資訊並回傳 JSON: ${bookInput}`;
+      aiRes = callGemini_(searchPrompt, null, null, true);
+      Logger.log('[SCRAPE_URL] Phase4 fallback aiRes.success=%s', aiRes && aiRes.success);
     }
 
     if (!aiRes.success) {
-      const gBooksSearch = fetchGoogleBooks_(bookUrl);
+      const gBooksSearch = fetchGoogleBooks_(bookInput);
       if (gBooksSearch.success) return gBooksSearch;
-      return { success: false, message: '解析失敗' };
+      return { success: false, message: '解析失敗', debugPhase };
     }
 
     const data = parseAiJson_(aiRes.text);
-    if (!data) return { success: false, message: 'JSON 解析失敗' };
+    if (!data) return { success: false, message: 'JSON 解析失敗', debugPhase };
 
     return {
       success: true,
@@ -319,7 +324,8 @@ function handleUrlScrape_(bookUrl) {
       category: data.category || '',
       coverUrl: data.coverUrl || '',
       summary: data.summary || '',
-      actionType: aiRes.actionType
+      actionType: aiRes.actionType,
+      debugPhase
     };
   } catch (e) {
     return { success: false, message: '系統異常: ' + e.message };
@@ -399,6 +405,7 @@ function handleRecordSubmission_(data) {
 
     const finalTitle = data.subtitle ? `${data.title}：${data.subtitle}` : data.title;
     const completionDate = data.completionDate || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    Logger.log('[SUBMIT] nextId=%s data.completionDate=%s typeof=%s finalCompletionDate=%s', nextId, data.completionDate, typeof data.completionDate, completionDate);
 
     sheet.appendRow([
       nextId,
@@ -413,7 +420,7 @@ function handleRecordSubmission_(data) {
       data.url || '' // 新增第10欄：來源連結
     ]);
 
-    return ContentService.createTextOutput(JSON.stringify({ success: true, message: '儲存成功' })).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ success: true, message: '儲存成功', debugId: nextId, debugReceivedDate: data.completionDate, debugFinalDate: completionDate })).setMimeType(ContentService.MimeType.JSON);
   } catch (e) { 
     return ContentService.createTextOutput(JSON.stringify({ success: false, message: e.toString() })).setMimeType(ContentService.MimeType.JSON); 
   } finally {

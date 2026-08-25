@@ -267,17 +267,19 @@ function App() {
                                     </div>
                                 </div>
                                 
-                                <div className="preview-shared-section">
-                                    <div className="mini-preview-card">
-                                        <div className="preview-label">當前解析結果預覽</div>
-                                        <img src={formData.coverUrl || DEFAULT_COVER} alt="Cover Preview" onError={(e) => e.target.src = DEFAULT_COVER} />
-                                        <div className="mini-info">
-                                            <div className="mini-title">{formData.title || '尚未輸入書名'}</div>
-                                            <div className="mini-author">{formData.author || '辨識中...'}</div>
-                                            <div className="mini-meta">{formData.publisher} / {formData.category}</div>
+                                {formData.title && (
+                                    <div className="preview-shared-section">
+                                        <div className="mini-preview-card">
+                                            <div className="preview-label">當前解析結果預覽</div>
+                                            <img src={formData.coverUrl || DEFAULT_COVER} alt="Cover Preview" onError={(e) => e.target.src = DEFAULT_COVER} />
+                                            <div className="mini-info">
+                                                <div className="mini-title">{formData.title}</div>
+                                                <div className="mini-author">{formData.author || '作者未知'}</div>
+                                                <div className="mini-meta">{formData.publisher} / {formData.category}</div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
 
                             <div className="grid-2">

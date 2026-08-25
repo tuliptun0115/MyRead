@@ -648,13 +648,45 @@ body {
   }
   
   .mini-preview-card {
+    display: flex;
     flex-direction: row;
-    height: 100px;
+    flex-wrap: wrap;
+    height: auto;
+  }
+
+  .mini-preview-card .preview-label {
+    flex-basis: 100%;
   }
 
   .mini-preview-card img {
-    width: 80px;
-    height: 100%;
+    width: 90px;
+    height: 120px;
+    flex-shrink: 0;
+    object-fit: cover;
+    padding: 0;
+  }
+
+  .mini-preview-card .mini-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0.75rem;
+  }
+
+  .mini-preview-card .mini-title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .mini-preview-card .mini-author,
+  .mini-preview-card .mini-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .preview-shared-section {
