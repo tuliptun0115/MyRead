@@ -2,7 +2,19 @@
 
 ## 更新紀錄
 
-### [V4.1] - 2026-03-21 (最新版本)
+### [V4.2] - 2026-08-25 (最新版本)
+#### 🐛 修復博客來網址解析錯誤與相關體驗問題
+- **網址解析根因**：`handleUrlScrape_` 原本把博客來商品網址的商品 ID 直接當作博客來「搜尋頁」的關鍵字查詢，但搜尋頁不支援用商品 ID 比對，導致命中完全不相關的書籍。改為導入 **Firecrawl**（`firecrawlScrape_`，需在 GAS Script Properties 設定 `FIRECRAWL_API_KEY`）直接抓取商品頁乾淨內容，再交給 Gemini 抽取結構化資料。
+- **OCR 自動查詢隱藏 bug**：拍照辨識後自動以書名查詢書籍資訊時，原邏輯會對純文字書名呼叫 `UrlFetchApp.fetch()`（非合法網址）直接丟例外，導致該路徑必定失敗。改為先判斷輸入是否為網址，非網址則直接走 Gemini 連網搜尋。
+- **AI 心得欄位空白**：強化 Phase 3 抽取 prompt，明確要求 summary 欄位不可留空。
+- **正式站前端 5 個月未更新**：gh-pages 最後部署停在 2026-03-21（db06fb0），已重新 build 並用 `npm run deploy` 同步到目前 `main` 版本。
+- **手機版預覽卡片排版**：`.mini-preview-card` 在手機寬度媒體查詢裡缺少 `display: flex`，導致書名/作者資訊被 `overflow:hidden` 裁切消失（外觀像「破圖」）。修正為正確的 flex 排版，封面採 90×120、`object-fit: cover` 呈現。
+- **預覽卡片空狀態優化**：改為僅在有實際解析結果（`formData.title` 非空）時才顯示預覽卡片，避免剛進頁面或辨識中看到破圖與「辨識中...」的怪異畫面。
+- **殘留除錯輔助**：`gas_backend.gs` 的 `SCRAPE_URL`／`SUBMIT` 回應中留有 `debugPhase` / `debugId` / `debugReceivedDate` / `debugFinalDate` 等除錯欄位與對應 `Logger.log`，前端目前未顯示這些欄位，不影響功能，之後可視情況清理。
+
+---
+
+### [V4.1] - 2026-03-21
 #### 🚀 核心重構與穩定性強化 (Phase 1)
 - **統一 AI 橋接器 (Unified AI Bridge)**：整併 OCR、摘要與解析功能為單一 API 核心，並內建 Google Search Grounding 連網搜尋備援。
 - **併發寫入鎖定 (Concurrency Lock)**：在資料寫入端導入 `LockService`，徹底杜絕高併發下的序號重複與資料覆寫風險。

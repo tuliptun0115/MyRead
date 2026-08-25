@@ -32,11 +32,11 @@
 - [ ] 部署上線
 
 ## 當前進度備註
-- **最後更新**：2026-04-26
+- **最後更新**：2026-08-25
 - **使用工具**：Claude Code
-- **做到哪裡**：後端與 AI 串接完成，前端儀表板待完成
-- **下一步**：完成前端儀表板
-- **注意事項**：Google Books API 評估後不適合中文書，改用 Gemini Search Grounding
+- **做到哪裡**：修復博客來網址解析錯誤（改用 Firecrawl 抓商品頁）、OCR 自動查詢的隱藏例外、AI 心得摘要空白、手機版預覽卡片排版被裁切、正式站前端 5 個月未部署等問題；已重新部署正式站並推送至 GitHub main（詳見 `docs/log.md` V4.2）。前端儀表板 UI 仍待完成。
+- **下一步**：完成前端儀表板；視情況清理 `gas_backend.gs` 殘留的除錯欄位（debugPhase/debugId 等，不影響功能）。
+- **注意事項**：Google Books API 評估後不適合中文書，改用 Gemini Search Grounding；博客來網址解析現依賴 Firecrawl（GAS Script Properties 需設定 `FIRECRAWL_API_KEY`）；GAS 後端修改後務必用「管理部署作業→編輯→新版本」部署，不可新建部署（會變更 `/exec` 網址）。
 
 ## 完成定義（Done Criteria）
 - 上傳書籍封面可自動辨識並記錄，儀表板可正常瀏覽
