@@ -6,6 +6,7 @@
 
 ## 1. 啟動與授權規範 (Agent Execution Protocol)
 - **大腦授權確認**：每次啟動新 Session 或進行重要開發任務前，Agent 必須讀取本文件與全域規章，回報 `MD Get！`，且**嚴禁在未收到使用者明確同意或指示前，進行任何程式碼變更、檔案建立或指令執行**。
+- **編碼防呆**：所有核心 Markdown 文件一律使用 `UTF-8 with BOM`；修改後需以預設 PowerShell 讀取確認無亂碼。
 - **專案三件套限制**：
   - 本專案根目錄必須且僅能保留專案標準三件套文件：
     1. [plan.md](file:///c:/Users/8475/Desktop/AI Project/My_Read/plan.md) (實作計劃書)
