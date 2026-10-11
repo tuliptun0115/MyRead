@@ -1,12 +1,13 @@
 const COLORS = ['#fb6f92', '#ff85a1', '#ffb3c1', '#ffc2d1', '#ff7096', '#ff99ac', '#ffe5ec', '#dadada'];
 
 const YearlyChart = ({ records }) => {
-    // 1. 提取年份統計
+    // 1. 提取年份統計 (使用正規表達式擷取 4 位數年份)
     const yearlyData = {};
     records.forEach(r => {
         if (r.completionDate) {
-            const year = r.completionDate.split('-')[0];
-            if (year && year.length === 4) {
+            const match = String(r.completionDate).match(/\b(20\d{2})\b/);
+            if (match) {
+                const year = match[1];
                 yearlyData[year] = (yearlyData[year] || 0) + 1;
             }
         }
