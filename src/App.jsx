@@ -54,7 +54,11 @@ function App() {
         try {
             const data = await apiService.fetchRecords();
             if (data && data.length > 0) {
-                const sorted = data.sort((a, b) => new Date(b.completionDate) - new Date(a.completionDate));
+                const sorted = data.sort((a, b) => {
+                    const diff = new Date(b.completionDate) - new Date(a.completionDate);
+                    if (diff !== 0) return diff;
+                    return String(b.id || '').localeCompare(String(a.id || ''), undefined, { numeric: true });
+                });
                 setRecords(sorted);
             }
         } catch (e) {

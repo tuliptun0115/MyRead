@@ -12,6 +12,7 @@ export default function BookListItem({ record, defaultCover, onClick }) {
                 <div className="list-meta">
                     <span className="list-author-publisher">{record.author} / {record.publisher}</span>
                     <span className="list-category" style={{ marginLeft: '8px' }}>{record.category}</span>
+                    <span className="list-date-mobile" style={{ marginLeft: '8px' }}>📅 {record.completionDate}</span>
                 </div>
                 <div className="list-summary">{record.summary}</div>
             </div>

@@ -668,6 +668,13 @@ body {
   font-weight: 500;
 }
 
+.list-date-mobile {
+  display: none;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
 /* ── Detail Page ── */
 .book-detail {
   animation: slideUp 0.6s ease;
@@ -866,6 +873,7 @@ body {
   .book-list-item { gap: 0.48rem; padding: 0.36rem; }
   .list-cover { width: 45px; height: 63px; }
   .list-date { display: none; }
+  .list-date-mobile { display: inline-block; }
   .detail-hero { flex-direction: column; padding: 1rem; gap: 1rem; }
   .detail-cover-img { width: 140px; margin: 0 auto; }
   .detail-title { font-size: 1.6rem; }
