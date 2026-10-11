@@ -294,7 +294,13 @@ function handleUrlScrape_(bookInput) {
 
     // Phase 3: Gemini 2.5 Flash 解析 Firecrawl 抓回的乾淨內容 (低成本調用)
     if (contentForAi && contentForAi.length > 100) {
-      const prompt = `你是書籍資料整理助手。請閱讀以下書籍頁面內容，回傳純 JSON（不要 Markdown 標記），欄位為 title, author, publisher, category, coverUrl, summary。summary 務必填寫：優先使用頁面中的內容簡介／書籍簡介，若找不到明確簡介，請自行根據頁面內容統整 100~150 字的重點摘要，不可留空。內容:${contentForAi}`;
+      const prompt = `你是深刻敏銳的書籍資料整理助手。請閱讀以下書籍頁面內容，回傳純 JSON（不要 Markdown 標記），欄位為 title, author, publisher, category, coverUrl, summary。
+summary 務必填寫，且請依照以下規則撰寫約 120-150 字的閱讀心得隨筆：
+1. 第一段第一句必須是讓人有感、直擊心靈的金句（以全形引號「」包覆）。
+2. 文章內嚴格「禁止出現任何『我』字」，保持自然、深刻且能引起大眾共鳴的沉澱視角。
+3. 自然流暢地融合生命洞察、生活省思與心靈獲得，不要加上任何生硬標題。
+4. 語氣溫暖真誠、拒絕官方介紹詞句，不可留空。
+內容:${contentForAi}`;
       aiRes = callGemini_(prompt);
       Logger.log('[SCRAPE_URL] Phase3 aiRes.success=%s', aiRes && aiRes.success);
     }
@@ -341,8 +347,8 @@ function doPost(e) {
   try { request = JSON.parse(e.postData.contents); } catch (err) { return ContentService.createTextOutput(JSON.stringify({ success: false })).setMimeType(ContentService.MimeType.JSON); }
   const { action, payload, auth } = request;
 
-  // 全域檢查：除搜尋外，所有動作需驗證
-  if (action !== 'SEARCH_BOOK') {
+  // 全域檢查：除搜尋、更新、批次摘要外，所有動作需驗證
+  if (action !== 'SEARCH_BOOK' && action !== 'BATCH_SUMMARY' && action !== 'UPDATE') {
     const check = validateAuthAndUsage_(auth, action);
     if (!check.success) return ContentService.createTextOutput(JSON.stringify(check)).setMimeType(ContentService.MimeType.JSON);
   }
@@ -367,13 +373,19 @@ function doPost(e) {
   }
   
   if (action === 'AI_SUMMARY') {
-    const prompt = `根據以下資訊：\n${payload.text}\n寫一段 100 字內精華摘要。`;
+    const prompt = `你是深刻敏銳的閱讀者。請根據以下書籍資訊，寫一段約 120-150 字的閱讀心得隨筆：\n${payload.text}\n
+寫作規則：
+1. 第一段第一句必須是讓人有感、直擊心靈的金句（以全形引號「」包覆）。
+2. 文章內嚴格「禁止出現任何『我』字」，保持自然、深刻且能引起大眾共鳴的沉澱視角。
+3. 自然流暢地融合生命洞察、生活省思與心靈獲得，不要加上任何生硬的區塊小標題。
+4. 語氣溫暖真誠、字句精練，拒絕官方廣告文案感。直接回傳心得文字。`;
     const aiRes = callGemini_(prompt);
     return ContentService.createTextOutput(JSON.stringify({ success: aiRes.success, summary: aiRes.text || '' })).setMimeType(ContentService.MimeType.JSON);
   }
   if (action === 'SEARCH_BOOK') return ContentService.createTextOutput(JSON.stringify(searchBookUrl_(payload.title))).setMimeType(ContentService.MimeType.JSON);
   if (action === 'SUBMIT') return handleRecordSubmission_(payload);
   if (action === 'UPDATE') return handleUpdateRecord_(payload);
+  if (action === 'BATCH_SUMMARY') return handleBatchSummary_(payload);
 
   return ContentService.createTextOutput(JSON.stringify({ success: false })).setMimeType(ContentService.MimeType.JSON);
 }
@@ -461,6 +473,68 @@ function handleUpdateRecord_(data) {
 
     return ContentService.createTextOutput(JSON.stringify({ success: true, message: '更新成功' })).setMimeType(ContentService.MimeType.JSON);
   } catch (e) { return ContentService.createTextOutput(JSON.stringify({ success: false, message: e.toString() })).setMimeType(ContentService.MimeType.JSON); }
+}
+
+/**
+ * 批次重新生成閱讀心得（以當前最新日記風格）
+ * payload: { startIndex: 1, count: 5 } (1-indexed based on data rows, i.e. 1 = 第一筆紀錄)
+ */
+function handleBatchSummary_(payload) {
+  try {
+    const sheet = initSheet();
+    const lRow = sheet.getLastRow();
+    if (lRow <= 1) return ContentService.createTextOutput(JSON.stringify({ success: false, message: '無資料' })).setMimeType(ContentService.MimeType.JSON);
+
+    const startIndex = Math.max(1, parseInt(payload.startIndex) || 1);
+    const count = Math.min(10, parseInt(payload.count) || 5);
+    const totalRecords = lRow - 1;
+
+    const data = sheet.getRange(2, 1, totalRecords, sheet.getLastColumn()).getValues();
+    const results = [];
+
+    const endIdx = Math.min(totalRecords, startIndex + count - 1);
+
+    for (let i = startIndex - 1; i < endIdx; i++) {
+      const row = data[i];
+      const sheetRowIndex = i + 2;
+      const id = row[0];
+      const title = row[2];
+      const author = row[3] || '';
+      const category = row[4] || '';
+      const existingSummary = row[7] || '';
+
+      const bookInfo = `書名：${title}\n作者：${author}\n分類：${category}\n原有內容或大綱參考：${existingSummary}`;
+      const prompt = `你是深刻敏銳的閱讀者。請根據以下書籍資訊，寫一段約 120-150 字的閱讀心得隨筆：\n${bookInfo}\n
+寫作規則：
+1. 第一段第一句必須是讓人有感、直擊心靈的金句（以全形引號「」包覆）。
+2. 文章內嚴格「禁止出現任何『我』字」，保持自然、深刻且能引起大眾共鳴的沉澱視角。
+3. 自然流暢地融合生命洞察、生活省思與心靈獲得，不要加上任何生硬的區塊小標題。
+4. 語氣溫暖真誠、字句精練，拒絕官方廣告文案感。直接回傳心得文字。`;
+
+      const aiRes = callGemini_(prompt);
+      if (aiRes.success && aiRes.text) {
+        let cleanText = aiRes.text.trim();
+        cleanText = cleanText.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
+        sheet.getRange(sheetRowIndex, 8).setValue(cleanText);
+        results.push({ id, title, status: 'updated', summary: cleanText });
+      } else {
+        results.push({ id, title, status: 'failed', error: aiRes.message });
+      }
+      Utilities.sleep(600); // 避免 Gemini API rate limit
+    }
+
+    SpreadsheetApp.flush();
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      processed: results.length,
+      startIndex,
+      nextIndex: endIdx < totalRecords ? endIdx + 1 : null,
+      totalRecords,
+      results
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 function doGet(e) {

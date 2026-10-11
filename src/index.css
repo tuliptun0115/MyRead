@@ -860,6 +860,7 @@ body {
   font-size: 1.15rem; /* 放大 */
   line-height: 1.9;
   color: var(--text-primary);
+  white-space: pre-wrap; /* 保留換行與分段 */
 }
 
 /* ── Animations ── */
