@@ -371,7 +371,7 @@ function doPost(e) {
     const aiRes = callGemini_(prompt);
     return ContentService.createTextOutput(JSON.stringify({ success: aiRes.success, summary: aiRes.text || '' })).setMimeType(ContentService.MimeType.JSON);
   }
-  if (action === 'SEARCH_BOOK') return ContentService.createTextOutput(JSON.stringify({ success: true, data: scrapeBooksComTw_(payload.title) })).setMimeType(ContentService.MimeType.JSON);
+  if (action === 'SEARCH_BOOK') return ContentService.createTextOutput(JSON.stringify(searchBookUrl_(payload.title))).setMimeType(ContentService.MimeType.JSON);
   if (action === 'SUBMIT') return handleRecordSubmission_(payload);
   if (action === 'UPDATE') return handleUpdateRecord_(payload);
 
@@ -419,6 +419,7 @@ function handleRecordSubmission_(data) {
       data.coverUrl || '',
       data.url || '' // 新增第10欄：來源連結
     ]);
+    SpreadsheetApp.flush(); // 強制立即寫入試算表，避免非同步讀取延遲
 
     return ContentService.createTextOutput(JSON.stringify({ success: true, message: '儲存成功', debugId: nextId, debugReceivedDate: data.completionDate, debugFinalDate: completionDate })).setMimeType(ContentService.MimeType.JSON);
   } catch (e) { 
@@ -456,6 +457,7 @@ function handleUpdateRecord_(data) {
     sheet.getRange(rowIndex, 7).setValue(data.publisher || '');
     sheet.getRange(rowIndex, 8).setValue(data.summary || '');
     sheet.getRange(rowIndex, 9).setValue(data.coverUrl || '');
+    SpreadsheetApp.flush();
 
     return ContentService.createTextOutput(JSON.stringify({ success: true, message: '更新成功' })).setMimeType(ContentService.MimeType.JSON);
   } catch (e) { return ContentService.createTextOutput(JSON.stringify({ success: false, message: e.toString() })).setMimeType(ContentService.MimeType.JSON); }
@@ -493,24 +495,74 @@ function doGet(e) {
   } catch (error) { return ContentService.createTextOutput(JSON.stringify({ success: false, message: error.toString() })).setMimeType(ContentService.MimeType.JSON); }
 }
 
-function scrapeBooksComTw_(query) {
-  if (!query) return { coverUrl: '', summary: '' };
+/**
+ * 🔍 搜尋博客來書籍網址：提供書名，尋找最相符的博客來商品頁網址
+ */
+function searchBookUrl_(bookTitle) {
+  if (!bookTitle) return { success: false, message: '請輸入書名' };
+  const cleanTitle = String(bookTitle).trim();
+
+  // 1. 優先嘗試 Firecrawl 搜尋 (若有金鑰)
+  const fcKey = getFirecrawlKey_();
+  if (fcKey) {
+    try {
+      const res = UrlFetchApp.fetch('https://api.firecrawl.dev/v1/search', {
+        method: 'post',
+        contentType: 'application/json',
+        headers: { Authorization: 'Bearer ' + fcKey },
+        payload: JSON.stringify({
+          query: `site:books.com.tw/products ${cleanTitle}`,
+          limit: 3
+        }),
+        muteHttpExceptions: true
+      });
+      if (res.getResponseCode() === 200) {
+        const json = JSON.parse(res.getContentText());
+        if (json.success && json.data && json.data.length > 0) {
+          const match = json.data.find(item => item.url && item.url.includes('books.com.tw/products/')) || json.data[0];
+          if (match && match.url) {
+            return {
+              success: true,
+              url: match.url,
+              title: match.title || cleanTitle,
+              source: 'firecrawl'
+            };
+          }
+        }
+      }
+    } catch (e) {
+      Logger.log('[SEARCH_BOOK] Firecrawl search exception: ' + e.message);
+    }
+  }
+
+  // 2. 備援方案：Gemini 連網搜尋 (Google Search Grounding)
   try {
-    const searchUrl = `https://search.books.com.tw/search/query/key/${encodeURIComponent(query)}/cat/all`;
-    const response = UrlFetchApp.fetch(searchUrl, { muteHttpExceptions: true });
-    const html = response.getContentText();
-    const bookUrlMatch = html.match(/href="([^"]*books\.com\.tw\/products\/[^"]*)"/);
-    if (!bookUrlMatch) return { coverUrl: '', summary: '' };
-    
-    const bookUrl = bookUrlMatch[1].startsWith('//') ? 'https:' + bookUrlMatch[1] : bookUrlMatch[1];
-    const bookRes = UrlFetchApp.fetch(bookUrl, { muteHttpExceptions: true });
-    const bookHtml = bookRes.getContentText();
-    const coverMatch = bookHtml.match(/https?:\/\/[^"]+getimage\.php\?i=[^&"]+/i);
-    const summaryMatch = bookHtml.match(/<div class="content">([\s\S]*?)<\/div>/i);
-    
-    return {
-      coverUrl: coverMatch ? coverMatch[0] : '',
-      summary: summaryMatch ? summaryMatch[1].replace(/<[^>]+>/g, '').trim().substring(0, 300) : ''
-    };
-  } catch (e) { return { coverUrl: '', summary: '' }; }
+    const prompt = `你是書籍搜尋助手。請連網搜尋「${cleanTitle}」在博客來網路書店 (books.com.tw) 的商品頁網址。
+請回傳純 JSON 格式（不要加任何 Markdown 標記或反引號）：
+{
+  "title": "博客來上的完整書名",
+  "author": "作者",
+  "url": "https://www.books.com.tw/products/..."
 }
+注意：url 必須是博客來商品頁連結 (格式需為 https://www.books.com.tw/products/...)。若找不到博客來連結，請提供最權威的繁體中文書籍介紹網址。`;
+
+    const aiRes = callGemini_(prompt, null, null, true);
+    if (aiRes.success) {
+      const parsed = parseAiJson_(aiRes.text);
+      if (parsed && parsed.url) {
+        return {
+          success: true,
+          url: parsed.url,
+          title: parsed.title || cleanTitle,
+          author: parsed.author || '',
+          source: 'gemini'
+        };
+      }
+    }
+  } catch (e) {
+    Logger.log('[SEARCH_BOOK] Gemini search exception: ' + e.message);
+  }
+
+  return { success: false, message: '找不到相關書籍連結，請嘗試手動貼上網址' };
+}
+

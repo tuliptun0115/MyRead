@@ -40,7 +40,9 @@ const apiService = {
    */
   async fetchRecords() {
     try {
-      const response = await fetch(GAS_URL);
+      const separator = GAS_URL.includes('?') ? '&' : '?';
+      const url = `${GAS_URL}${separator}_t=${Date.now()}`;
+      const response = await fetch(url, { cache: 'no-store' });
       const res = await response.json();
       return res.success ? (res.data || []) : [];
     } catch (error) {

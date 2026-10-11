@@ -37,8 +37,12 @@ function App() {
     const [currentPage, setCurrentPage] = useState('home'); 
     const [selectedRecord, setSelectedRecord] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
-    const [inputMode, setInputMode] = useState('upload'); // 'upload' or 'url'
+    const [inputMode, setInputMode] = useState('search'); // 'search' or 'url'
     const [bookUrl, setBookUrl] = useState('');
+    const [searchTitle, setSearchTitle] = useState('');
+    const [searchingBook, setSearchingBook] = useState(false);
+    const [foundBook, setFoundBook] = useState(null);
+    const [showManualUrl, setShowManualUrl] = useState(false);
 
     const [formData, setFormData] = useState({
         title: '', subtitle: '', author: '', publisher: '', 
@@ -60,99 +64,30 @@ function App() {
         }
     };
 
-    const compressImage = (file) => new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = 600; canvas.height = 800;
-                canvas.getContext('2d').drawImage(img, 0, 0, 600, 800);
-                resolve(canvas.toDataURL('image/jpeg', 0.8));
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    });
-
-    const handleImageUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        try {
-            const b64WithPrefix = await compressImage(file);
-            const b64Data = b64WithPrefix.split(',')[1];
-            
-            setFormData(prev => ({ ...prev, coverUrl: b64WithPrefix }));
-            setOcrLoading(true);
-            setToast('🔍 封面辨識中 (Gemini 2.5)...');
-
-            const ocrRes = await apiService.performOCR(b64Data, auth);
-            
-            if (ocrRes.success) {
-                setFormData(prev => ({ 
-                    ...prev, 
-                    title: ocrRes.title, 
-                    author: ocrRes.author || '',
-                    publisher: ocrRes.publisher || '',
-                    category: ocrRes.category || '',
-                    completionDate: new Date().toISOString().split('T')[0]
-                }));
-                
-                setToast(`📚 找到《${ocrRes.title}》，正在檢索快取...`);
-                
-                // ⚡ 優化：利用後端的 SCRAPE_URL (已帶快取檢查) 傳入書名進行精確檢索
-                const searchRes = await apiService.scrapeUrl(ocrRes.title, auth);
-
-                if (searchRes.success) {
-                    const isCache = searchRes.actionType === 'CACHE_HIT';
-                    setFormData(prev => ({
-                        ...prev,
-                        coverUrl: searchRes.coverUrl || prev.coverUrl,
-                        author: searchRes.author || prev.author,
-                        publisher: searchRes.publisher || prev.publisher,
-                        category: searchRes.category || prev.category,
-                        summary: searchRes.summary || prev.summary
-                    }));
-                    setToast(isCache ? '⚡ 命中快取！已秒速恢復細節。' : '✅ 辨識與搜尋網頁資料完成！');
-                } else {
-                    setToast('✅ 辨識完成，請手動校對內容。');
-                }
-            } else {
-                setToast(`❌ 辨識失敗：${ocrRes.message || '連線超時'}`);
-            }
-        } catch (err) {
-            setToast('❌ 圖片處理異常');
-        } finally {
-            setOcrLoading(false);
-        }
-    };
-
-    const handleUrlInquiry = async () => {
-        if (!bookUrl) return setToast('⚠️ 請先輸入網址');
+    const triggerUrlInquiry = async (targetUrl) => {
+        const urlToFetch = (targetUrl || bookUrl || '').trim();
+        if (!urlToFetch) return setToast('⚠️ 請先輸入網址');
         setOcrLoading(true);
         setToast('🌐 正在解析網頁內容...');
         
         try {
-            const res = await apiService.scrapeUrl(bookUrl, auth);
+            const res = await apiService.scrapeUrl(urlToFetch, auth);
             if (res.success) {
                 const isCache = res.actionType === 'CACHE_HIT';
                 setFormData(prev => ({
                     ...prev,
-                    title: res.title || '',
-                    author: res.author || '',
-                    publisher: res.publisher || '',
-                    category: res.category || '',
-                    coverUrl: res.coverUrl || '',
-                    summary: res.summary || '',
-                    completionDate: new Date().toISOString().split('T')[0]
+                    title: res.title || prev.title || '',
+                    author: res.author || prev.author || '',
+                    publisher: res.publisher || prev.publisher || '',
+                    category: res.category || prev.category || '',
+                    coverUrl: res.coverUrl || prev.coverUrl || '',
+                    summary: res.summary || prev.summary || '',
+                    completionDate: prev.completionDate || new Date().toISOString().split('T')[0]
                 }));
 
-                setToast(isCache ? '⚡ 快取命中！(0 Token 消耗)' : '✅ 網頁資料解析完成！');
-                if (isCache) {
-                    console.log('Detected cache hit from backend logic.');
-                }
-                setBookUrl(''); 
+                setToast(isCache ? '⚡ 快取命中！已填寫書籍資料' : '✅ 網頁資料解析完成，已自動填入！');
+                setBookUrl('');
+                setFoundBook(null);
             } else {
                 setToast(`❌ 解析失敗: ${res.message}`);
             }
@@ -160,6 +95,33 @@ function App() {
             setToast('❌ 網頁解析異常');
         } finally {
             setOcrLoading(false);
+        }
+    };
+
+    const handleSearchBook = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        const query = searchTitle.trim();
+        if (!query) return setToast('⚠️ 請先輸入書名');
+        setSearchingBook(true);
+        setFoundBook(null);
+        setToast('🔍 正在博客來檢索相關書籍連結...');
+
+        try {
+            const res = await apiService.searchBook(query);
+            if (res && res.success && res.url) {
+                setFoundBook({
+                    title: res.title || query,
+                    url: res.url,
+                    author: res.author || ''
+                });
+                setToast('🎯 已找到相關書籍，請確認連結！');
+            } else {
+                setToast(`⚠️ ${res?.message || '找不到博客來相關書籍，請手動貼上網址'}`);
+            }
+        } catch (err) {
+            setToast('❌ 搜尋失敗，請手動貼上網址');
+        } finally {
+            setSearchingBook(false);
         }
     };
 
@@ -172,8 +134,32 @@ function App() {
             const res = await apiService.submitRecord(formData, auth);
             if (res.success) {
                 setToast('✅ 紀錄已成功存檔！');
+
+                // ⚡ 樂觀更新：立即將新書加入本地 records state，確保當日連續記錄多本時秒級顯現
+                const optimisticRecord = {
+                    id: res.debugId || `BK${records.length + 1}`,
+                    title: formData.title,
+                    author: formData.author || '',
+                    publisher: formData.publisher || '',
+                    category: formData.category || '',
+                    completionDate: formData.completionDate || new Date().toISOString().split('T')[0],
+                    summary: formData.summary || '',
+                    coverUrl: formData.coverUrl || '',
+                    creationDate: new Date().toISOString().split('T')[0]
+                };
+                setRecords(prev => {
+                    const filtered = prev.filter(r => r.id !== optimisticRecord.id);
+                    const updated = [optimisticRecord, ...filtered];
+                    return updated.sort((a, b) => new Date(b.completionDate) - new Date(a.completionDate));
+                });
+
                 setFormData({ title: '', subtitle: '', author: '', publisher: '', category: '', completionDate: '', summary: '', coverUrl: '' });
-                fetchRecords();
+                setFoundBook(null);
+                setSearchTitle('');
+                setBookUrl('');
+                
+                // 非同步遠端重新同步真實試算表資料
+                await fetchRecords();
             } else {
                 setToast(`❌ 儲存失敗: ${res.message}`);
             }
@@ -234,53 +220,112 @@ function App() {
                     </div>
 
                     <div className="form-container">
-                        <form onSubmit={handleSubmit}>
-                            <div className="form-grid-layout">
-                                <div className="input-method-stack">
-                                    <div className="upload-section">
-                                        <label className="upload-label">
-                                            {formData.coverUrl && formData.coverUrl.startsWith('data:') ? (
-                                                <img src={formData.coverUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => e.target.src = DEFAULT_COVER} />
-                                            ) : (
-                                                <div className="upload-placeholder">
-                                                    <CameraIcon />
-                                                    <span style={{ fontSize: '0.9rem', textAlign: 'center' }}>上傳書籍封面圖</span>
-                                                    {ocrLoading && <div className="ocr-loading"><span>分析中...</span></div>}
-                                                </div>
-                                            )}
-                                            <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden-input" />
-                                        </label>
+                        {/* ── 書籍查詢區塊 (搜尋博客來 / 輸入網址) ── */}
+                        <div className="book-inquiry-container">
+                            <div className="search-section">
+                                <label className="search-main-label">📖 輸入書名快速檢索博客來書籍</label>
+                                <div className="search-input-wrapper">
+                                    <input 
+                                        type="text" 
+                                        value={searchTitle} 
+                                        onChange={(e) => setSearchTitle(e.target.value)} 
+                                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearchBook(); } }}
+                                        placeholder="輸入書名（例如：原子習慣、重要的小事）" 
+                                        className="search-main-input"
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={handleSearchBook} 
+                                        className="nav-btn action-btn search-btn" 
+                                        disabled={searchingBook}
+                                    >
+                                        {searchingBook ? '🔍 檢索中...' : '🔍 尋找博客來'}
+                                    </button>
+                                </div>
+
+                                {/* 找到書籍後的確認卡片 */}
+                                {foundBook && (
+                                    <div className="found-confirm-card">
+                                        <div className="found-badge">🎯 找到博客來書籍資料，請確認是否為這本書：</div>
+                                        <div className="found-title">{foundBook.title}</div>
+                                        {foundBook.author && <div className="found-author">作者：{foundBook.author}</div>}
+                                        <div className="found-link-row">
+                                            <span style={{ fontSize: '0.85rem', opacity: 0.8 }}>博客來連結：</span>
+                                            <a href={foundBook.url} target="_blank" rel="noopener noreferrer" className="found-link">
+                                                {foundBook.url} ↗（在新分頁預覽）
+                                            </a>
+                                        </div>
+                                        <div className="found-actions">
+                                            <button 
+                                                type="button" 
+                                                onClick={() => triggerUrlInquiry(foundBook.url)} 
+                                                className="nav-btn action-btn" 
+                                                disabled={ocrLoading}
+                                                style={{ flex: 1 }}
+                                            >
+                                                {ocrLoading ? '🚀 正在解析資料...' : '✅ 確認是這本，解析資料'}
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setFoundBook(null)} 
+                                                className="nav-btn secondary"
+                                                disabled={ocrLoading}
+                                            >
+                                                ✕ 重新搜尋
+                                            </button>
+                                        </div>
                                     </div>
-                                    
-                                    <div className="input-box url-input-area" style={{ marginTop: '0.5rem' }}>
-                                        <label>或者，🔗 輸入書籍介紹網址</label>
+                                )}
+
+                                {/* 選填：直接輸入網址 */}
+                                <div className="manual-url-toggle-bar">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setShowManualUrl(!showManualUrl)} 
+                                        className="toggle-link-btn"
+                                    >
+                                        {showManualUrl ? '▲ 收起網址輸入' : '🔗 或者直接貼上書籍介紹網址 (點擊展開)'}
+                                    </button>
+                                </div>
+
+                                {showManualUrl && (
+                                    <div className="manual-url-row">
                                         <input 
                                             name="bookUrl" 
                                             type="text" 
                                             value={bookUrl} 
                                             onChange={(e) => setBookUrl(e.target.value)} 
                                             placeholder="https://www.books.com.tw/..." 
+                                            style={{ flex: 1 }}
                                         />
-                                        <button type="button" onClick={handleUrlInquiry} className="nav-btn action-btn" style={{ marginTop: '10px', width: '100%', height: '40px' }} disabled={ocrLoading}>
-                                            {ocrLoading ? '🚀 正在解析中...' : '🚀 解析網頁資料'}
+                                        <button 
+                                            type="button" 
+                                            onClick={() => triggerUrlInquiry()} 
+                                            className="nav-btn action-btn" 
+                                            disabled={ocrLoading}
+                                        >
+                                            {ocrLoading ? '🚀 解析中...' : '🚀 解析網頁'}
                                         </button>
-                                    </div>
-                                </div>
-                                
-                                {formData.title && (
-                                    <div className="preview-shared-section">
-                                        <div className="mini-preview-card">
-                                            <div className="preview-label">當前解析結果預覽</div>
-                                            <img src={formData.coverUrl || DEFAULT_COVER} alt="Cover Preview" onError={(e) => e.target.src = DEFAULT_COVER} />
-                                            <div className="mini-info">
-                                                <div className="mini-title">{formData.title}</div>
-                                                <div className="mini-author">{formData.author || '作者未知'}</div>
-                                                <div className="mini-meta">{formData.publisher} / {formData.category}</div>
-                                            </div>
-                                        </div>
                                     </div>
                                 )}
                             </div>
+
+                            {formData.title && (
+                                <div className="preview-shared-section">
+                                    <div className="mini-preview-card">
+                                        <div className="preview-label">當前解析結果預覽</div>
+                                        <img src={formData.coverUrl || DEFAULT_COVER} alt="Cover Preview" onError={(e) => e.target.src = DEFAULT_COVER} />
+                                        <div className="mini-info">
+                                            <div className="mini-title">{formData.title}</div>
+                                            <div className="mini-author">{formData.author || '作者未知'}</div>
+                                            <div className="mini-meta">{formData.publisher} / {formData.category}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <form onSubmit={handleSubmit} style={{ marginTop: '1.2rem' }}>
 
                             <div className="grid-2">
                                 <div className="input-box">
