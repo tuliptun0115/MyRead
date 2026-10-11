@@ -185,6 +185,61 @@ function App() {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    // ── 🔗 網址 Hash 路由同步邏輯 ──
+    const syncRouteFromHash = () => {
+        const hash = window.location.hash.replace(/^#\/?/, '') || 'home';
+        const [path, queryStr] = hash.split('?');
+        const params = new URLSearchParams(queryStr || '');
+
+        if (path === 'stats') {
+            setCurrentPage('stats');
+            setSelectedRecord(null);
+            setIsEditing(false);
+        } else if (path === 'list') {
+            setCurrentPage('list');
+            const p = parseInt(params.get('page'), 10);
+            if (!isNaN(p) && p > 0) setListPage(p);
+            setSelectedRecord(null);
+            setIsEditing(false);
+        } else if (path === 'detail') {
+            const id = params.get('id');
+            if (id && records.length > 0) {
+                const found = records.find(r => String(r.id) === String(id));
+                if (found) {
+                    setSelectedRecord(found);
+                    setCurrentPage('detail');
+                    return;
+                }
+            }
+            if (id) {
+                // 若 records 尚未載入，稍後會在 records 更新時匹配
+                setCurrentPage('detail');
+            }
+        } else {
+            setCurrentPage('home');
+            setSelectedRecord(null);
+            setIsEditing(false);
+        }
+    };
+
+    // 監聽 hash 變化
+    useEffect(() => {
+        syncRouteFromHash();
+        const handleHashChange = () => syncRouteFromHash();
+        window.addEventListener('hashchange', handleHashChange);
+        return () => window.removeEventListener('hashchange', handleHashChange);
+    }, [records]);
+
+    // 路由跳轉輔助函式
+    const navigateTo = (page, params = {}) => {
+        let hash = `#/${page}`;
+        const queryParts = [];
+        if (params.page && params.page > 1) queryParts.push(`page=${params.page}`);
+        if (params.id) queryParts.push(`id=${params.id}`);
+        if (queryParts.length > 0) hash += `?${queryParts.join('&')}`;
+        window.location.hash = hash;
+    };
+
     useEffect(() => { if (auth) fetchRecords(); }, [auth]);
     useEffect(() => { if (toast) { const t = setTimeout(() => setToast(''), 3000); return () => clearTimeout(t); } }, [toast]);
 
@@ -212,11 +267,11 @@ function App() {
     return (
         <div className="container">
             <div className="site-header">
-                <h1 onClick={() => setCurrentPage('home')} style={{ cursor: 'pointer' }}><BookIcon /> 書香閱讀</h1>
+                <h1 onClick={() => navigateTo('home')} style={{ cursor: 'pointer' }}><BookIcon /> 書香閱讀</h1>
                 <nav className="page-nav">
-                    <button className={`nav-btn ${currentPage === 'home' ? 'active' : ''}`} onClick={() => setCurrentPage('home')}>首頁</button>
-                    <button className={`nav-btn ${currentPage === 'list' ? 'active' : ''}`} onClick={() => setCurrentPage('list')}>閱讀紀錄</button>
-                    <button className={`nav-btn ${currentPage === 'stats' ? 'active' : ''}`} onClick={() => setCurrentPage('stats')}>數據中心</button>
+                    <button className={`nav-btn ${currentPage === 'home' ? 'active' : ''}`} onClick={() => navigateTo('home')}>首頁</button>
+                    <button className={`nav-btn ${currentPage === 'list' ? 'active' : ''}`} onClick={() => navigateTo('list', { page: listPage })}>閱讀紀錄</button>
+                    <button className={`nav-btn ${currentPage === 'stats' ? 'active' : ''}`} onClick={() => navigateTo('stats')}>數據中心</button>
                     <button className="nav-btn logout" onClick={() => { setAuth(null); localStorage.removeItem('myread_auth'); }}>登出</button>
                 </nav>
             </div>
@@ -369,13 +424,18 @@ function App() {
 
                     <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                         <h2 className="section-title" style={{ marginBottom: 0 }}>最新閱讀紀錄</h2>
-                        <button className="nav-btn secondary" onClick={() => setCurrentPage('list')}>看全部</button>
+                        <button className="nav-btn secondary" onClick={() => navigateTo('list', { page: 1 })}>看全部</button>
                     </div>
                     {fetching ? <div className="loader-text">載入中...</div> : (
                         <div className="books-list">
                             {records.length > 0 ? (
                                 records.slice(0, 5).map((r, i) => (
-                                    <BookListItem key={i} record={r} defaultCover={DEFAULT_COVER} onClick={() => { setSelectedRecord(r); setCurrentPage('detail'); }} />
+                                    <BookListItem 
+                                        key={r.id || i} 
+                                        record={r} 
+                                        defaultCover={DEFAULT_COVER} 
+                                        onClick={() => navigateTo('detail', { id: r.id })} 
+                                    />
                                 ))
                             ) : (
                                 <div className="no-data">目前沒有紀錄，趕快分享一本好書吧！</div>
@@ -420,17 +480,17 @@ function App() {
                                     key={r.id || `${safePage}-${i}`} 
                                     record={r} 
                                     defaultCover={DEFAULT_COVER} 
-                                    onClick={() => { setSelectedRecord(r); setIsEditing(false); setCurrentPage('detail'); }} 
+                                    onClick={() => navigateTo('detail', { id: r.id })} 
                                 />
                             ))}
                         </div>
 
-                        {/* 📄 分頁導覽列 (每 20 筆 1 頁) */}
+                        {/* 📄 分頁導覽列 (每 20 筆 1 頁，網址同步顯示 #/list?page=X) */}
                         {totalPages > 1 && (
                             <div className="pagination-container">
                                 <button 
                                     className="page-btn" 
-                                    onClick={() => { setListPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                                    onClick={() => { navigateTo('list', { page: Math.max(1, safePage - 1) }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                                     disabled={safePage === 1}
                                 >
                                     ◀ 上一頁
@@ -440,7 +500,7 @@ function App() {
                                     <button 
                                         key={pageNum}
                                         className={`page-btn ${pageNum === safePage ? 'active' : ''}`}
-                                        onClick={() => { setListPage(pageNum); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                                        onClick={() => { navigateTo('list', { page: pageNum }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                                     >
                                         {pageNum}
                                     </button>
@@ -448,7 +508,7 @@ function App() {
 
                                 <button 
                                     className="page-btn" 
-                                    onClick={() => { setListPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                                    onClick={() => { navigateTo('list', { page: Math.min(totalPages, safePage + 1) }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                                     disabled={safePage === totalPages}
                                 >
                                     下一頁 ▶
@@ -470,19 +530,19 @@ function App() {
                 return (
                     <div className="book-detail">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem', flexWrap: 'wrap', gap: '0.8rem' }}>
-                            <button className="back-btn" style={{ marginBottom: 0 }} onClick={() => { setIsEditing(false); setCurrentPage(records.length > 5 ? 'list' : 'home'); }}>
+                            <button className="back-btn" style={{ marginBottom: 0 }} onClick={() => navigateTo('list', { page: listPage })}>
                                 ← 返回書庫
                             </button>
 
-                            {/* 📖 上一筆 / 下一筆 導覽按鈕群組 */}
+                            {/* 📖 上一筆 / 下一筆 導覽按鈕群組 (網址同步顯示 #/detail?id=BKxx) */}
                             <div className="detail-nav-actions">
                                 <button 
                                     className="detail-nav-btn"
                                     disabled={!hasPrev}
                                     onClick={() => {
                                         if (hasPrev) {
-                                            setSelectedRecord(records[currentIndex - 1]);
-                                            setIsEditing(false);
+                                            const prevRecord = records[currentIndex - 1];
+                                            navigateTo('detail', { id: prevRecord.id });
                                             window.scrollTo({ top: 0, behavior: 'smooth' });
                                         }
                                     }}
@@ -495,8 +555,8 @@ function App() {
                                     disabled={!hasNext}
                                     onClick={() => {
                                         if (hasNext) {
-                                            setSelectedRecord(records[currentIndex + 1]);
-                                            setIsEditing(false);
+                                            const nextRecord = records[currentIndex + 1];
+                                            navigateTo('detail', { id: nextRecord.id });
                                             window.scrollTo({ top: 0, behavior: 'smooth' });
                                         }
                                     }}
