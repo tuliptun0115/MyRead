@@ -35,6 +35,8 @@ function App() {
     const [ocrLoading, setOcrLoading] = useState(false);
     const [toast, setToast] = useState('');
     const [currentPage, setCurrentPage] = useState('home'); 
+    const [listPage, setListPage] = useState(1);
+    const PAGE_SIZE = 20;
     const [selectedRecord, setSelectedRecord] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
     const [inputMode, setInputMode] = useState('search'); // 'search' or 'url'
@@ -388,7 +390,12 @@ function App() {
                     <div className="home-stats-line" style={{ justifyContent: 'center', marginBottom: '2rem' }}>
                         <div className="home-stats-text">累計閱讀<span>{records.length}</span>本</div>
                     </div>
+                    {/* 📈 1. 年度閱讀趨勢 (移到上方) */}
                     <div className="stats-item" style={{ width: '100%', marginBottom: '2rem' }}>
+                        <YearlyChart records={records} />
+                    </div>
+                    {/* 📚 2. 分類佔比 (移到下方) */}
+                    <div className="stats-item" style={{ width: '100%' }}>
                         <h3 style={{ marginBottom: '1.5rem', fontSize: '1.4rem' }}>📚 分類佔比</h3>
                         <PieChart data={Object.entries(records.reduce((acc, r) => {
                             const cat = getMainCategory(r.category);
@@ -396,43 +403,127 @@ function App() {
                             return acc;
                         }, {})).sort((a,b) => b[1]-a[1])} />
                     </div>
-                    <div className="stats-item" style={{ width: '100%' }}>
-                        <YearlyChart records={records} />
-                    </div>
                 </div>
             )}
 
-            {currentPage === 'list' && (
-                <div className="books-list" style={{ marginTop: '20px' }}>
-                    {records.map((r, i) => (
-                        <BookListItem key={i} record={r} defaultCover={DEFAULT_COVER} onClick={() => { setSelectedRecord(r); setCurrentPage('detail'); }} />
-                    ))}
-                </div>
-            )}
+            {currentPage === 'list' && (() => {
+                const totalPages = Math.ceil(records.length / PAGE_SIZE) || 1;
+                const safePage = Math.min(Math.max(listPage, 1), totalPages);
+                const startIndex = (safePage - 1) * PAGE_SIZE;
+                const pageRecords = records.slice(startIndex, startIndex + PAGE_SIZE);
 
-            {currentPage === 'detail' && selectedRecord && (
-                <div className="book-detail">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2.5rem' }}>
-                        <button className="back-btn" style={{ marginBottom: 0 }} onClick={() => { setIsEditing(false); setCurrentPage(records.length > 5 ? 'list' : 'home'); }}>← 返回書庫</button>
-                        <button className="nav-btn" onClick={async () => {
-                            if (isEditing) {
-                                setLoading(true);
-                                const res = await apiService.updateRecord(selectedRecord, auth);
-                                if (res.success) {
-                                    setToast('✅ 資料更新成功！');
-                                    fetchRecords();
-                                    setIsEditing(false);
-                                } else {
-                                    setToast('❌ 更新失敗');
-                                }
-                                setLoading(false);
-                            } else {
-                                setIsEditing(true);
-                            }
-                        }}>
-                            {isEditing ? (loading ? '儲存中...' : '確認儲存') : '編輯資料'}
-                        </button>
+                return (
+                    <div style={{ marginTop: '20px' }}>
+                        <div className="books-list">
+                            {pageRecords.map((r, i) => (
+                                <BookListItem 
+                                    key={r.id || `${safePage}-${i}`} 
+                                    record={r} 
+                                    defaultCover={DEFAULT_COVER} 
+                                    onClick={() => { setSelectedRecord(r); setIsEditing(false); setCurrentPage('detail'); }} 
+                                />
+                            ))}
+                        </div>
+
+                        {/* 📄 分頁導覽列 (每 20 筆 1 頁) */}
+                        {totalPages > 1 && (
+                            <div className="pagination-container">
+                                <button 
+                                    className="page-btn" 
+                                    onClick={() => { setListPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                                    disabled={safePage === 1}
+                                >
+                                    ◀ 上一頁
+                                </button>
+
+                                {Array.from({ length: totalPages }, (_, idx) => idx + 1).map(pageNum => (
+                                    <button 
+                                        key={pageNum}
+                                        className={`page-btn ${pageNum === safePage ? 'active' : ''}`}
+                                        onClick={() => { setListPage(pageNum); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                                    >
+                                        {pageNum}
+                                    </button>
+                                ))}
+
+                                <button 
+                                    className="page-btn" 
+                                    onClick={() => { setListPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                                    disabled={safePage === totalPages}
+                                >
+                                    下一頁 ▶
+                                </button>
+                                <span className="page-info-text">
+                                    第 {safePage} / {totalPages} 頁 (共 {records.length} 筆)
+                                </span>
+                            </div>
+                        )}
                     </div>
+                );
+            })()}
+
+            {currentPage === 'detail' && selectedRecord && (() => {
+                const currentIndex = records.findIndex(r => r.id === selectedRecord.id);
+                const hasPrev = currentIndex > 0;
+                const hasNext = currentIndex !== -1 && currentIndex < records.length - 1;
+
+                return (
+                    <div className="book-detail">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem', flexWrap: 'wrap', gap: '0.8rem' }}>
+                            <button className="back-btn" style={{ marginBottom: 0 }} onClick={() => { setIsEditing(false); setCurrentPage(records.length > 5 ? 'list' : 'home'); }}>
+                                ← 返回書庫
+                            </button>
+
+                            {/* 📖 上一筆 / 下一筆 導覽按鈕群組 */}
+                            <div className="detail-nav-actions">
+                                <button 
+                                    className="detail-nav-btn"
+                                    disabled={!hasPrev}
+                                    onClick={() => {
+                                        if (hasPrev) {
+                                            setSelectedRecord(records[currentIndex - 1]);
+                                            setIsEditing(false);
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }
+                                    }}
+                                >
+                                    ◀ 上一筆
+                                </button>
+
+                                <button 
+                                    className="detail-nav-btn"
+                                    disabled={!hasNext}
+                                    onClick={() => {
+                                        if (hasNext) {
+                                            setSelectedRecord(records[currentIndex + 1]);
+                                            setIsEditing(false);
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }
+                                    }}
+                                >
+                                    下一筆 ▶
+                                </button>
+
+                                <button className="nav-btn" onClick={async () => {
+                                    if (isEditing) {
+                                        setLoading(true);
+                                        const res = await apiService.updateRecord(selectedRecord, auth);
+                                        if (res.success) {
+                                            setToast('✅ 資料更新成功！');
+                                            fetchRecords();
+                                            setIsEditing(false);
+                                        } else {
+                                            setToast('❌ 更新失敗');
+                                        }
+                                        setLoading(false);
+                                    } else {
+                                        setIsEditing(true);
+                                    }
+                                }}>
+                                    {isEditing ? (loading ? '儲存中...' : '確認儲存') : '編輯資料'}
+                                </button>
+                            </div>
+                        </div>
 
                     <div className="detail-hero">
                         <img src={selectedRecord.coverUrl || DEFAULT_COVER} className="detail-cover-img" alt="封面" />
@@ -486,8 +577,9 @@ function App() {
                         </div>
                     </div>
                 </div>
-            )}
-        </div>
+            );
+        })()}
+    </div>
     );
 }
 

@@ -691,6 +691,89 @@ body {
   font-weight: 600;
 }
 
+/* ── Pagination ── */
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 2rem 0 1rem;
+  flex-wrap: wrap;
+}
+
+.page-btn {
+  background: var(--bg-card);
+  border: 1.5px solid var(--glass-border);
+  color: var(--text-primary);
+  padding: 0.5rem 0.9rem;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.page-btn:hover:not(:disabled) {
+  border-color: var(--accent-pink);
+  color: var(--accent-pink);
+  transform: translateY(-2px);
+}
+
+.page-btn.active {
+  background: var(--accent-pink);
+  color: #fff;
+  border-color: var(--accent-pink);
+  box-shadow: 0 4px 12px var(--accent-pink-glow);
+}
+
+.page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.page-info-text {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin: 0 0.5rem;
+}
+
+/* ── Detail Prev/Next Nav ── */
+.detail-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.detail-nav-btn {
+  background: var(--bg-card);
+  border: 1.5px solid var(--glass-border);
+  color: var(--text-primary);
+  padding: 0.45rem 0.9rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.detail-nav-btn:hover:not(:disabled) {
+  border-color: var(--accent-pink);
+  color: var(--accent-pink);
+  transform: translateY(-2px);
+}
+
+.detail-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
+
 /* ── Detail Page ── */
 .book-detail {
   animation: slideUp 0.6s ease;

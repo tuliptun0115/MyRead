@@ -25,12 +25,12 @@ const YearlyChart = ({ records }) => {
     return (
         <div className="yearly-chart-container" style={{ 
             marginTop: '0px', 
-            padding: '40px 10px 20px', 
+            padding: '10px 10px 20px', 
             textAlign: 'center',
             width: '100%',
             overflow: 'visible'
         }}>
-            <h4 style={{ marginBottom: '15px', fontSize: '0.9rem', opacity: 0.8 }}>年度閱讀趨勢</h4>
+            <h3 style={{ marginBottom: '1.5rem', fontSize: '1.4rem' }}>📈 年度閱讀趨勢</h3>
             <div style={{ 
                 display: 'flex', 
                 alignItems: 'flex-end', 
