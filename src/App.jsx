@@ -410,8 +410,8 @@ function App() {
                                     <input name="publisher" type="text" value={formData.publisher} onChange={handleInputChange} />
                                 </div>
                                 <div className="input-box" style={{ gridColumn: 'span 2' }}>
-                                    <label>AI 心得</label>
-                                    <textarea name="summary" value={formData.summary} onChange={handleInputChange} rows="5" placeholder="自動產生的精華摘要..." />
+                                    <label>讀後心得</label>
+                                    <textarea name="summary" value={formData.summary} onChange={handleInputChange} rows="5" />
                                 </div>
                                 <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'center' }}>
                                     <button type="submit" className="submit-btn" disabled={loading} style={{ width: '200px' }}>
@@ -435,6 +435,7 @@ function App() {
                                         record={r} 
                                         defaultCover={DEFAULT_COVER} 
                                         onClick={() => navigateTo('detail', { id: r.id })} 
+                                        showIdBadge={false}
                                     />
                                 ))
                             ) : (
@@ -615,7 +616,7 @@ function App() {
                                         <input type="date" value={selectedRecord.completionDate} onChange={(e) => setSelectedRecord({...selectedRecord, completionDate: e.target.value})} />
                                     </div>
                                     <div className="input-box" style={{ gridColumn: 'span 2' }}>
-                                        <label>AI 摘要精華</label>
+                                        <label>讀後心得</label>
                                         <textarea rows="6" value={selectedRecord.summary} onChange={(e) => setSelectedRecord({...selectedRecord, summary: e.target.value})} />
                                     </div>
                                 </div>
@@ -629,7 +630,7 @@ function App() {
                                         閱讀完成日：{selectedRecord.completionDate || '未記錄'}
                                     </p>
                                     <div className="detail-summary-section">
-                                        <h3>AI 摘要精華</h3>
+                                        <h3>讀後心得</h3>
                                         <p className="detail-summary-text">{selectedRecord.summary}</p>
                                     </div>
                                 </>

@@ -1,4 +1,4 @@
-export default function BookListItem({ record, defaultCover, onClick }) {
+export default function BookListItem({ record, defaultCover, onClick, showIdBadge = true }) {
     return (
         <div className="book-list-item" onClick={onClick} style={{ cursor: 'pointer' }}>
             <img 
@@ -9,7 +9,7 @@ export default function BookListItem({ record, defaultCover, onClick }) {
             />
             <div className="list-info">
                 <div className="list-title">
-                    <span className="list-id-badge">{record.id}</span>
+                    {showIdBadge && <span className="list-id-badge">{record.id}</span>}
                     {record.title}
                 </div>
                 <div className="list-meta">
