@@ -30,7 +30,7 @@ const YearlyChart = ({ records }) => {
             width: '100%',
             overflow: 'visible'
         }}>
-            <h3 style={{ marginBottom: '1.5rem', fontSize: '1.4rem' }}>📈 年度閱讀趨勢</h3>
+            <h3 style={{ marginBottom: '1.5rem', fontSize: '1.4rem' }}>年度閱讀趨勢</h3>
             <div style={{ 
                 display: 'flex', 
                 alignItems: 'flex-end', 

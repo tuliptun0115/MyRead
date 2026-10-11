@@ -64,7 +64,7 @@ function App() {
                 setRecords(sorted);
             }
         } catch (e) {
-            setToast('⚠️ 資料讀取異常');
+            setToast('資料讀取異常');
         } finally {
             setFetching(false);
         }
@@ -72,9 +72,9 @@ function App() {
 
     const triggerUrlInquiry = async (targetUrl) => {
         const urlToFetch = (targetUrl || bookUrl || '').trim();
-        if (!urlToFetch) return setToast('⚠️ 請先輸入網址');
+        if (!urlToFetch) return setToast('請先輸入網址');
         setOcrLoading(true);
-        setToast('🌐 正在解析網頁內容...');
+        setToast('正在解析網頁內容...');
         
         try {
             const res = await apiService.scrapeUrl(urlToFetch, auth);
@@ -91,14 +91,14 @@ function App() {
                     completionDate: prev.completionDate || new Date().toISOString().split('T')[0]
                 }));
 
-                setToast(isCache ? '⚡ 快取命中！已填寫書籍資料' : '✅ 網頁資料解析完成，已自動填入！');
+                setToast(isCache ? '快取命中！已填寫書籍資料' : '網頁資料解析完成，已自動填入！');
                 setBookUrl('');
                 setFoundBook(null);
             } else {
-                setToast(`❌ 解析失敗: ${res.message}`);
+                setToast(`解析失敗: ${res.message}`);
             }
         } catch (e) {
-            setToast('❌ 網頁解析異常');
+            setToast('網頁解析異常');
         } finally {
             setOcrLoading(false);
         }
@@ -107,10 +107,10 @@ function App() {
     const handleSearchBook = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
         const query = searchTitle.trim();
-        if (!query) return setToast('⚠️ 請先輸入書名');
+        if (!query) return setToast('請先輸入書名');
         setSearchingBook(true);
         setFoundBook(null);
-        setToast('🔍 正在博客來檢索相關書籍連結...');
+        setToast('正在博客來檢索相關書籍連結...');
 
         try {
             const res = await apiService.searchBook(query);
@@ -120,12 +120,12 @@ function App() {
                     url: res.url,
                     author: res.author || ''
                 });
-                setToast('🎯 已找到相關書籍，請確認連結！');
+                setToast('已找到相關書籍，請確認連結！');
             } else {
-                setToast(`⚠️ ${res?.message || '找不到博客來相關書籍，請手動貼上網址'}`);
+                setToast(`${res?.message || '找不到博客來相關書籍，請手動貼上網址'}`);
             }
         } catch (err) {
-            setToast('❌ 搜尋失敗，請手動貼上網址');
+            setToast('搜尋失敗，請手動貼上網址');
         } finally {
             setSearchingBook(false);
         }
@@ -133,15 +133,15 @@ function App() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.title) return setToast('⚠️ 請至少輸入書名');
+        if (!formData.title) return setToast('請至少輸入書名');
         
         setLoading(true);
         try {
             const res = await apiService.submitRecord(formData, auth);
             if (res.success) {
-                setToast('✅ 紀錄已成功存檔！');
+                setToast('紀錄已成功存檔！');
 
-                // ⚡ 樂觀更新：立即將新書加入本地 records state，確保當日連續記錄多本時秒級顯現
+                // 樂觀更新：立即將新書加入本地 records state，確保當日連續記錄多本時秒級顯現
                 const optimisticRecord = {
                     id: res.debugId || `BK${records.length + 1}`,
                     title: formData.title,
@@ -171,10 +171,10 @@ function App() {
                 // 非同步遠端重新同步真實試算表資料
                 await fetchRecords();
             } else {
-                setToast(`❌ 儲存失敗: ${res.message}`);
+                setToast(`儲存失敗: ${res.message}`);
             }
         } catch (e) {
-            setToast('❌ 連線至伺服器失敗');
+            setToast('連線至伺服器失敗');
         } finally {
             setLoading(false);
         }
@@ -288,7 +288,7 @@ function App() {
                         {/* ── 書籍查詢區塊 (搜尋博客來 / 輸入網址) ── */}
                         <div className="book-inquiry-container">
                             <div className="search-section">
-                                <label className="search-main-label">📖 輸入書名快速檢索博客來書籍</label>
+                                <label className="search-main-label">輸入書名快速檢索博客來書籍</label>
                                 <div className="search-input-wrapper">
                                     <input 
                                         type="text" 
@@ -304,14 +304,14 @@ function App() {
                                         className="nav-btn action-btn search-btn" 
                                         disabled={searchingBook}
                                     >
-                                        {searchingBook ? '🔍 檢索中...' : '🔍 尋找博客來'}
+                                        {searchingBook ? '檢索中...' : '尋找博客來'}
                                     </button>
                                 </div>
 
                                 {/* 找到書籍後的確認卡片 */}
                                 {foundBook && (
                                     <div className="found-confirm-card">
-                                        <div className="found-badge">🎯 找到博客來書籍資料，請確認是否為這本書：</div>
+                                        <div className="found-badge">找到博客來書籍資料，請確認是否為這本書：</div>
                                         <div className="found-title">{foundBook.title}</div>
                                         {foundBook.author && <div className="found-author">作者：{foundBook.author}</div>}
                                         <div className="found-link-row">
@@ -328,7 +328,7 @@ function App() {
                                                 disabled={ocrLoading}
                                                 style={{ flex: 1 }}
                                             >
-                                                {ocrLoading ? '🚀 正在解析資料...' : '✅ 確認是這本，解析資料'}
+                                                {ocrLoading ? '正在解析資料...' : '確認是這本，解析資料'}
                                             </button>
                                             <button 
                                                 type="button" 
@@ -349,7 +349,7 @@ function App() {
                                         onClick={() => setShowManualUrl(!showManualUrl)} 
                                         className="toggle-link-btn"
                                     >
-                                        {showManualUrl ? '▲ 收起網址輸入' : '🔗 或者直接貼上書籍介紹網址 (點擊展開)'}
+                                        {showManualUrl ? '▲ 收起網址輸入' : '或者直接貼上書籍介紹網址 (點擊展開)'}
                                     </button>
                                 </div>
 
@@ -369,7 +369,7 @@ function App() {
                                             className="nav-btn action-btn" 
                                             disabled={ocrLoading}
                                         >
-                                            {ocrLoading ? '🚀 解析中...' : '🚀 解析網頁'}
+                                            {ocrLoading ? '解析中...' : '解析網頁'}
                                         </button>
                                     </div>
                                 )}
@@ -410,7 +410,7 @@ function App() {
                                     <input name="publisher" type="text" value={formData.publisher} onChange={handleInputChange} />
                                 </div>
                                 <div className="input-box" style={{ gridColumn: 'span 2' }}>
-                                    <label>✨ AI 心得</label>
+                                    <label>AI 心得</label>
                                     <textarea name="summary" value={formData.summary} onChange={handleInputChange} rows="5" placeholder="自動產生的精華摘要..." />
                                 </div>
                                 <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'center' }}>
@@ -456,7 +456,7 @@ function App() {
                     </div>
                     {/* 📚 2. 分類佔比 (移到下方) */}
                     <div className="stats-item" style={{ width: '100%' }}>
-                        <h3 style={{ marginBottom: '1.5rem', fontSize: '1.4rem' }}>📚 分類佔比</h3>
+                        <h3 style={{ marginBottom: '1.5rem', fontSize: '1.4rem' }}>分類佔比</h3>
                         <PieChart data={Object.entries(records.reduce((acc, r) => {
                             const cat = getMainCategory(r.category);
                             acc[cat] = (acc[cat] || 0) + 1;
@@ -569,11 +569,11 @@ function App() {
                                         setLoading(true);
                                         const res = await apiService.updateRecord(selectedRecord, auth);
                                         if (res.success) {
-                                            setToast('✅ 資料更新成功！');
+                                            setToast('資料更新成功！');
                                             fetchRecords();
                                             setIsEditing(false);
                                         } else {
-                                            setToast('❌ 更新失敗');
+                                            setToast('更新失敗');
                                         }
                                         setLoading(false);
                                     } else {
@@ -591,7 +591,7 @@ function App() {
                             {isEditing ? (
                                 <div className="edit-form grid-2">
                                     <div className="input-box" style={{ gridColumn: 'span 2' }}>
-                                        <label>📖 高清封面連結</label>
+                                        <label>高清封面連結</label>
                                         <input type="text" value={selectedRecord.coverUrl} onChange={(e) => setSelectedRecord({...selectedRecord, coverUrl: e.target.value})} placeholder="輸入圖片網址" />
                                     </div>
                                     <div className="input-box" style={{ gridColumn: 'span 2' }}>
@@ -615,7 +615,7 @@ function App() {
                                         <input type="date" value={selectedRecord.completionDate} onChange={(e) => setSelectedRecord({...selectedRecord, completionDate: e.target.value})} />
                                     </div>
                                     <div className="input-box" style={{ gridColumn: 'span 2' }}>
-                                        <label>📝 AI 摘要精華</label>
+                                        <label>AI 摘要精華</label>
                                         <textarea rows="6" value={selectedRecord.summary} onChange={(e) => setSelectedRecord({...selectedRecord, summary: e.target.value})} />
                                     </div>
                                 </div>
@@ -626,10 +626,10 @@ function App() {
                                         {selectedRecord.author} | {selectedRecord.publisher} | {selectedRecord.category}
                                     </p>
                                     <p className="detail-meta-text" style={{ fontSize: '1rem', marginTop: '-1.5rem' }}>
-                                        📅 閱讀完成日：{selectedRecord.completionDate || '未記錄'}
+                                        閱讀完成日：{selectedRecord.completionDate || '未記錄'}
                                     </p>
                                     <div className="detail-summary-section">
-                                        <h3>📝 AI 摘要精華</h3>
+                                        <h3>AI 摘要精華</h3>
                                         <p className="detail-summary-text">{selectedRecord.summary}</p>
                                     </div>
                                 </>
