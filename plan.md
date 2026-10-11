@@ -28,15 +28,16 @@
 - [x] 串接 Gemini AI 封面辨識
 - [x] 建立 Google Apps Script 後端（gas_backend.gs）
 - [x] 串接 Google Sheets 歸檔
-- [ ] 完成前端儀表板 UI
-- [ ] 部署上線
+- [x] 完成前端儀表板 UI
+- [x] 部署上線
 
 ## 當前進度備註
-- **最後更新**：2026-08-25
-- **使用工具**：Claude Code
-- **做到哪裡**：修復博客來網址解析錯誤（改用 Firecrawl 抓商品頁）、OCR 自動查詢的隱藏例外、AI 心得摘要空白、手機版預覽卡片排版被裁切、正式站前端 5 個月未部署等問題；已重新部署正式站並推送至 GitHub main（詳見 `docs/log.md` V4.2）。前端儀表板 UI 仍待完成。
-- **下一步**：完成前端儀表板；視情況清理 `gas_backend.gs` 殘留的除錯欄位（debugPhase/debugId 等，不影響功能）。
-- **注意事項**：Google Books API 評估後不適合中文書，改用 Gemini Search Grounding；博客來網址解析現依賴 Firecrawl（GAS Script Properties 需設定 `FIRECRAWL_API_KEY`）；GAS 後端修改後務必用「管理部署作業→編輯→新版本」部署，不可新建部署（會變更 `/exec` 網址）。
+- **最後更新**：2026-10-11
+- **使用工具**：Antigravity (Gemini 3.1 Pro)
+- **做到哪裡**：完成「輸入書名檢索博客來網址與確認流程」、隱藏低頻之書籍封面拍照上傳；修復當日同日多書在列表頁與統計數據未即時計入問題（GAS 加入 SpreadsheetApp.flush()、前端 GET 加入防快取時間戳、表單存檔後樂觀更新本地 records 狀態）；正式站已建置並透過 gh-pages 發布上線，代碼已同步至 GitHub main。後端已直接透過 Apps Script API 同步雲端程式碼並更新現有 Web App 部署至 Version 82。
+- **下一步**：使用者實際體驗與驗證前端正式站與後端運作。
+- **注意事項**：後端已透過本地與 API 綁定現有部署 `AKfycbxLxonX8Fy46eIWZ1MKC4YSioDztY04sop-lToVjyNBJBUzWI0LD7ioHislAZbNCwpj`，切勿新建部署。
 
 ## 完成定義（Done Criteria）
-- 上傳書籍封面可自動辨識並記錄，儀表板可正常瀏覽
+- 輸入書籍名稱或網址可自動辨識並記錄，儀表板可正常瀏覽且同日多書即時更新
+
