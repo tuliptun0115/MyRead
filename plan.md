@@ -34,10 +34,17 @@
 ## 當前進度備註
 - **最後更新**：2026-10-11
 - **使用工具**：Antigravity (Gemini 3.1 Pro)
-- **做到哪裡**：完成「輸入書名檢索博客來網址與確認流程」、隱藏低頻之書籍封面拍照上傳；修復當日同日多書在列表頁與統計數據未即時計入問題（GAS 加入 SpreadsheetApp.flush()、前端 GET 加入防快取時間戳、表單存檔後樂觀更新本地 records 狀態）；正式站已建置並透過 gh-pages 發布上線，代碼已同步至 GitHub main。後端已直接透過 Apps Script API 同步雲端程式碼並更新現有 Web App 部署至 Version 82。
-- **下一步**：使用者實際體驗與驗證前端正式站與後端運作。
-- **注意事項**：後端已透過本地與 API 綁定現有部署 `AKfycbxLxonX8Fy46eIWZ1MKC4YSioDztY04sop-lToVjyNBJBUzWI0LD7ioHislAZbNCwpj`，切勿新建部署。
+- **做到哪裡**：
+  1. 完成閱讀紀錄列表每 20 筆分頁與網址 Hash 路由（`#/list?page=X`）。
+  2. 書籍單則詳情頁支援「上一筆／下一筆」導覽與網址 Hash 路由（`#/detail?id=BKxx`）。
+  3. 詳情頁封面圖片比例修復（`object-fit: contain`），杜絕拉長變形。
+  4. 數據中心版面優化：年度閱讀趨勢圖置頂、字級統一為 1.4rem，修復年份正規表達式匹配。
+  5. AI 心得去味重塑與全量更新：重寫 Prompt 為「生活札記隨筆感」，嚴格排除「我」字，第一段獨立為「」生活金句，生活感三段式排版（`white-space: pre-wrap`）。後端已部署至 Version 88，全量 66 筆書籍心得已 100% 批次重塑完成。
+  6. 全站 UI 文案與視覺優化：全站移除 Emoji，文案改為「讀後心得」、刪除 placeholder；ID Tag 數字不加粗（`font-weight: 400`）；首頁最新 5 本書籍隱藏 ID Tag。
+  7. GitHub main 分支與 GitHub Pages 正式站已全數建置並發布完成。
+- **下一步**：後續維護或依需要新增其他自訂標籤或分類。
+- **注意事項**：GAS 後端部署維持既有 ID `AKfycbxLxonX8Fy46eIWZ1MKC4YSioDztY04sop-lToVjyNBJBUzWI0LD7ioHislAZbNCwpj`，切勿新建部署。
 
 ## 完成定義（Done Criteria）
-- 輸入書籍名稱或網址可自動辨識並記錄，儀表板可正常瀏覽且同日多書即時更新
+- 前端儀表板、分頁、詳情導覽、去 AI 味心得與視覺呈現皆已符合規格並上線運行。
 
