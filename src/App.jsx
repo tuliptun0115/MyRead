@@ -154,7 +154,11 @@ function App() {
                 setRecords(prev => {
                     const filtered = prev.filter(r => r.id !== optimisticRecord.id);
                     const updated = [optimisticRecord, ...filtered];
-                    return updated.sort((a, b) => new Date(b.completionDate) - new Date(a.completionDate));
+                    return updated.sort((a, b) => {
+                        const diff = new Date(b.completionDate) - new Date(a.completionDate);
+                        if (diff !== 0) return diff;
+                        return String(b.id || '').localeCompare(String(a.id || ''), undefined, { numeric: true });
+                    });
                 });
 
                 setFormData({ title: '', subtitle: '', author: '', publisher: '', category: '', completionDate: '', summary: '', coverUrl: '' });

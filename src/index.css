@@ -633,6 +633,22 @@ body {
   font-weight: 700;
   margin-bottom: 0.4rem;
   color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.list-id-badge {
+  display: inline-block;
+  background: var(--accent-pink);
+  color: #fff;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  vertical-align: middle;
 }
 
 .list-meta {

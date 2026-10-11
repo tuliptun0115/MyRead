@@ -8,7 +8,10 @@ export default function BookListItem({ record, defaultCover, onClick }) {
                 alt="封面"
             />
             <div className="list-info">
-                <div className="list-title">{record.title}</div>
+                <div className="list-title">
+                    <span className="list-id-badge">{record.id}</span>
+                    {record.title}
+                </div>
                 <div className="list-meta">
                     <span className="list-author-publisher">{record.author} / {record.publisher}</span>
                     <span className="list-category" style={{ marginLeft: '8px' }}>{record.category}</span>
