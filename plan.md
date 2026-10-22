@@ -32,8 +32,8 @@
 - [x] 部署上線
 
 ## 當前進度備註
-- **最後更新**：2026-10-11
-- **使用工具**：Antigravity (Gemini 3.1 Pro)
+- **最後更新**：2026-10-22
+- **使用工具**：Antigravity (Gemini 3.8 Flash)
 - **做到哪裡**：
   1. 完成閱讀紀錄列表每 20 筆分頁與網址 Hash 路由（`#/list?page=X`）。
   2. 書籍單則詳情頁支援「上一筆／下一筆」導覽與網址 Hash 路由（`#/detail?id=BKxx`）。
@@ -41,7 +41,11 @@
   4. 數據中心版面優化：年度閱讀趨勢圖置頂、字級統一為 1.4rem，修復年份正規表達式匹配。
   5. AI 心得去味重塑與全量更新：重寫 Prompt 為「生活札記隨筆感」，嚴格排除「我」字，第一段獨立為「」生活金句，生活感三段式排版（`white-space: pre-wrap`）。後端已部署至 Version 88，全量 66 筆書籍心得已 100% 批次重塑完成。
   6. 全站 UI 文案與視覺優化：全站移除 Emoji，文案改為「讀後心得」、刪除 placeholder；ID Tag 數字不加粗（`font-weight: 400`）；首頁最新 5 本書籍隱藏 ID Tag。
-  7. GitHub main 分支與 GitHub Pages 正式站已全數建置並發布完成。
+  7. **新增登入全生命週期即時驗證防呆機制**：
+     - 前端登入表單於送出當下即時發送 `VERIFY_AUTH` 請求至後端比對 `User_Config`，密碼不符直接阻擋並顯示紅字錯誤提示。
+     - 加入開盤校驗：若本地存有舊憑證，啟動時背景自動靜默驗證，失效立即清空快取並導回登入頁。
+     - 全域操作失效攔截：日常 API 操作若遇帳密失效，自動清除憑證並踢回登入頁。
+     - GAS 後端已部署升級至 **Version 89**（維持既有 Web App 部署 ID `AKfycbxLxonX8Fy46eIWZ1MKC4YSioDztY04sop-lToVjyNBJBUzWI0LD7ioHislAZbNCwpj`），純驗證不消耗每日配額。
 - **下一步**：後續維護或依需要新增其他自訂標籤或分類。
 - **注意事項**：GAS 後端部署維持既有 ID `AKfycbxLxonX8Fy46eIWZ1MKC4YSioDztY04sop-lToVjyNBJBUzWI0LD7ioHislAZbNCwpj`，切勿新建部署。
 

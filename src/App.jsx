@@ -29,6 +29,8 @@ const getMainCategory = (rawCategory) => {
 function App() {
     const [auth, setAuth] = useState(getAuth());
     const [loginData, setLoginData] = useState({ username: '', password: '' });
+    const [loginLoading, setLoginLoading] = useState(false);
+    const [loginError, setLoginError] = useState('');
     const [records, setRecords] = useState([]);
     const [fetching, setFetching] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -50,6 +52,63 @@ function App() {
         title: '', subtitle: '', author: '', publisher: '', 
         category: '', completionDate: '', summary: '', coverUrl: ''
     });
+
+    // 統一失效強制登出導回機制
+    const forceLogout = (reasonMsg = '登入憑證已失效，請重新登入') => {
+        setAuth(null);
+        localStorage.removeItem('myread_auth');
+        setLoginError(reasonMsg);
+        setToast(reasonMsg);
+    };
+
+    // 啟動檢核：若本地有登入紀錄，背景向後端校驗；不吻合立即踢回登入頁
+    useEffect(() => {
+        const verifySavedAuth = async () => {
+            const saved = getAuth();
+            if (!saved) return;
+            try {
+                const res = await apiService.verifyAuth(saved);
+                if (res && res.success === false) {
+                    forceLogout(res.message || '登入憑證已失效，請重新登入');
+                }
+            } catch (e) {
+                console.warn('Initial auth check failed:', e);
+            }
+        };
+        verifySavedAuth();
+    }, []);
+
+    // 登入當下向後端即時驗證帳密
+    const handleLogin = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        const username = (loginData.username || '').trim();
+        const password = (loginData.password || '').trim();
+
+        if (!username || !password) {
+            setLoginError('請輸入帳號與密碼');
+            return;
+        }
+
+        setLoginLoading(true);
+        setLoginError('');
+
+        try {
+            const payload = { username, password };
+            const res = await apiService.verifyAuth(payload);
+            if (res && res.success) {
+                setAuth(payload);
+                localStorage.setItem('myread_auth', JSON.stringify(payload));
+                setLoginData({ username: '', password: '' });
+                setToast('登入成功');
+            } else {
+                setLoginError(res?.message || '帳號或密碼錯誤');
+            }
+        } catch (err) {
+            setLoginError('連線異常，請稍後再試');
+        } finally {
+            setLoginLoading(false);
+        }
+    };
 
     const fetchRecords = async () => {
         setFetching(true);
@@ -95,6 +154,10 @@ function App() {
                 setBookUrl('');
                 setFoundBook(null);
             } else {
+                if (res.message && (res.message.includes('帳號或密碼錯誤') || res.message.includes('請先登入'))) {
+                    forceLogout('帳號或密碼已變更，請重新登入');
+                    return;
+                }
                 setToast(`解析失敗: ${res.message}`);
             }
         } catch (e) {
@@ -171,6 +234,10 @@ function App() {
                 // 非同步遠端重新同步真實試算表資料
                 await fetchRecords();
             } else {
+                if (res.message && (res.message.includes('帳號或密碼錯誤') || res.message.includes('請先登入'))) {
+                    forceLogout('帳號或密碼已變更，請重新登入');
+                    return;
+                }
                 setToast(`儲存失敗: ${res.message}`);
             }
         } catch (e) {
@@ -256,9 +323,32 @@ function App() {
             <div className="login-overlay">
                 <div className="login-card">
                     <h2 className="login-title"><BookIcon /> 書香閱讀 登入</h2>
-                    <input type="text" placeholder="帳號" value={loginData.username} onChange={(e) => setLoginData({...loginData, username: e.target.value})} />
-                    <input type="password" placeholder="密碼" value={loginData.password} onChange={(e) => setLoginData({...loginData, password: e.target.value})} />
-                    <button onClick={() => { setAuth(loginData); localStorage.setItem('myread_auth', JSON.stringify(loginData)); }} className="submit-btn" style={{ marginTop: '20px' }}>進入書庫</button>
+                    <form onSubmit={handleLogin} className="login-form">
+                        <input 
+                            type="text" 
+                            placeholder="帳號" 
+                            value={loginData.username} 
+                            onChange={(e) => { setLoginData({...loginData, username: e.target.value}); setLoginError(''); }} 
+                            disabled={loginLoading}
+                            autoFocus
+                        />
+                        <input 
+                            type="password" 
+                            placeholder="密碼" 
+                            value={loginData.password} 
+                            onChange={(e) => { setLoginData({...loginData, password: e.target.value}); setLoginError(''); }} 
+                            disabled={loginLoading}
+                        />
+                        {loginError && <div className="login-error-msg">{loginError}</div>}
+                        <button 
+                            type="submit" 
+                            className="submit-btn" 
+                            disabled={loginLoading}
+                            style={{ marginTop: '20px' }}
+                        >
+                            {loginLoading ? '驗證中...' : '進入書庫'}
+                        </button>
+                    </form>
                 </div>
             </div>
         );
@@ -272,7 +362,7 @@ function App() {
                     <button className={`nav-btn ${currentPage === 'home' ? 'active' : ''}`} onClick={() => navigateTo('home')}>首頁</button>
                     <button className={`nav-btn ${currentPage === 'list' ? 'active' : ''}`} onClick={() => navigateTo('list', { page: listPage })}>閱讀紀錄</button>
                     <button className={`nav-btn ${currentPage === 'stats' ? 'active' : ''}`} onClick={() => navigateTo('stats')}>數據中心</button>
-                    <button className="nav-btn logout" onClick={() => { setAuth(null); localStorage.removeItem('myread_auth'); }}>登出</button>
+                    <button className="nav-btn logout" onClick={() => { setAuth(null); localStorage.removeItem('myread_auth'); setLoginError(''); }}>登出</button>
                 </nav>
             </div>
 
@@ -574,7 +664,12 @@ function App() {
                                             fetchRecords();
                                             setIsEditing(false);
                                         } else {
-                                            setToast('更新失敗');
+                                            if (res && res.message && (res.message.includes('帳號或密碼錯誤') || res.message.includes('請先登入'))) {
+                                                forceLogout('帳號或密碼已變更，請重新登入');
+                                                setLoading(false);
+                                                return;
+                                            }
+                                            setToast(res?.message ? `更新失敗: ${res.message}` : '更新失敗');
                                         }
                                         setLoading(false);
                                     } else {

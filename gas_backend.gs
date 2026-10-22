@@ -353,6 +353,10 @@ function doPost(e) {
     if (!check.success) return ContentService.createTextOutput(JSON.stringify(check)).setMimeType(ContentService.MimeType.JSON);
   }
 
+  if (action === 'VERIFY_AUTH') {
+    return ContentService.createTextOutput(JSON.stringify({ success: true, message: '驗證成功' })).setMimeType(ContentService.MimeType.JSON);
+  }
+
   if (action === 'OCR') {
     const prompt = `這是一張書籍封面。請提取書名 (title)、作者 (author)、出版社 (publisher)、分類 (category)。回傳純 JSON 格式。`;
     const aiRes = callGemini_(prompt, payload.base64, payload.mimeType);

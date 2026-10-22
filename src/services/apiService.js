@@ -54,6 +54,10 @@ const apiService = {
   /**
    * 圖片 OCR 辨識
    */
+  async verifyAuth(auth) {
+    return this.request('VERIFY_AUTH', {}, auth);
+  },
+
   async performOCR(base64Data, auth, mimeType = 'image/jpeg') {
     return this.request('OCR', { base64: base64Data, mimeType }, auth);
   },

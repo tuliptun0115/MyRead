@@ -21,6 +21,7 @@ npm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+nul
 
 # AI Meta-data
 .claude/
