@@ -16,11 +16,11 @@ React／Vite 前端、Google Apps Script 後端與 Google Sheets 歸檔正常運
 
 ## 3. Git 與同步狀態
 
-未確認：本地改動已完成建置驗證（`dist/` 通過），尚未 commit 與 push 至 `origin/main`；待使用者指示。
+已確認：所有改動已 commit 並推送至 `origin/main`（commit 459cf9e）；正式站（gh-pages）已建置並發布上線；working tree 乾淨。
 
 ## 4. 接手端下一步
 
-先讀 `plan.md` 與本檔；GAS 後端已指向最新 Version 89；接手端可進行本地預覽或依需要 commit 與發布。
+先讀 `plan.md` 與本檔；GAS 後端已指向最新 Version 89 並覆蓋正式 Web App 部署；前端正式站（GitHub Pages）已發布生效；接手端可直接進行日常功能使用與維護。
 
 ## 5. 風險、阻塞與注意事項
 
